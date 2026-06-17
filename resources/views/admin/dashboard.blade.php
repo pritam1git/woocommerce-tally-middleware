@@ -542,12 +542,9 @@
 
         </div>
 
-        <a href="" class="btn refresh-btn-new">
-
-            <i class="fa fa-rotate-right me-2"></i>
-
-            Refresh Data
-
+        <a href="{{ route('admin.bulk-sync') }}" class="btn refresh-btn-new">
+            <i class="fas fa-cloud-upload-alt me-2"></i>
+            Bulk Sync Orders
         </a>
 
     </div>

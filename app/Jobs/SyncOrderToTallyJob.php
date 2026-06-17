@@ -11,8 +11,9 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use App\Services\Tally\TallyVoucherService;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 
-class SyncOrderToTallyJob implements ShouldQueue
+class SyncOrderToTallyJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable,
         InteractsWithQueue,
@@ -25,12 +26,25 @@ class SyncOrderToTallyJob implements ShouldQueue
     |--------------------------------------------------------------------------
     */
 
-    public $tries = 10;
+    public $tries = 3;
 
-    public $backoff = [60, 120, 300];
+    /*
+    |--------------------------------------------------------------------------
+    | BACKOFF
+    |--------------------------------------------------------------------------
+    | Retry after: 1 min, 3 mins
+    */
+
+    public $backoff = [60, 180];
 
     public $timeout = 120;
+    /*
+    |--------------------------------------------------------------------------
+    | PREVENT DUPLICATE JOBS
+    |--------------------------------------------------------------------------
+    */
 
+    public $uniqueFor = 600;
     /*
     |--------------------------------------------------------------------------
     | ORDER ID
@@ -64,15 +78,12 @@ class SyncOrderToTallyJob implements ShouldQueue
         |--------------------------------------------------------------------------
         */
 
-        $tallyOrder = TallyOrder::find(
-            $this->orderId
-        );
+        $tallyOrder = TallyOrder::find($this->orderId);
 
         if (!$tallyOrder) {
 
-            Log::error('QUEUE ORDER NOT FOUND', [
-
-                'order_id' => $this->orderId,
+            Log::error('TALLY JOB — ORDER NOT FOUND IN DB', [
+                'order_id' => $this->orderId
             ]);
 
             return;
@@ -80,15 +91,17 @@ class SyncOrderToTallyJob implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
-        | PREVENT DUPLICATE SUCCESS SYNC
+        | SKIP IF ALREADY SYNCED
         |--------------------------------------------------------------------------
+        | Prevent re-processing a successfully synced order
+        | This can happen if webhook fires twice for same order
         */
 
         if ($tallyOrder->sync_status === 'success') {
 
-            Log::info('ORDER ALREADY SYNCED', [
-
-                'order_number' => $tallyOrder->order_number,
+            Log::info('TALLY JOB — SKIPPED (ALREADY SUCCESS)', [
+                'order_id'     => $tallyOrder->id,
+                'order_number' => $tallyOrder->order_number
             ]);
 
             return;
@@ -96,15 +109,14 @@ class SyncOrderToTallyJob implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
-        | MARK PROCESSING
+        | MARK AS PROCESSING
         |--------------------------------------------------------------------------
         */
 
         $tallyOrder->update([
-
             'sync_status' => 'processing',
-
             'retry_count' => $this->attempts(),
+            'last_error'  => null,
         ]);
 
         /*
@@ -113,65 +125,66 @@ class SyncOrderToTallyJob implements ShouldQueue
         |--------------------------------------------------------------------------
         */
 
-        $order = json_decode(
-            $tallyOrder->payload,
-            true
-        );
+        $order = json_decode($tallyOrder->payload, true);
 
-        if (
-            empty($order)
-            ||
-            !is_array($order)
-        ) {
+        /*
+        |--------------------------------------------------------------------------
+        | VALIDATE PAYLOAD
+        |--------------------------------------------------------------------------
+        */
+
+        if (empty($order) || !is_array($order)) {
 
             throw new \Exception(
-                'Invalid order payload'
+                'Invalid or empty payload in DB for order ID: ' . $this->orderId
             );
         }
 
         Log::info('TALLY JOB STARTED', [
-
-            'order_number' => (
-                $order['order_number'] ?? null
-            ),
-
-            'attempt' => $this->attempts(),
+            'db_order_id'          => $tallyOrder->id,
+            'woocommerce_order_id' => $order['id'] ?? null,
+            'order_number'         => $order['number'] ?? null,
+            'invoice_number'       => $order['invoice_number'] ?? null,
+            'attempt'              => $this->attempts(),
         ]);
 
         /*
         |--------------------------------------------------------------------------
-        | CREATE VOUCHER
+        | CREATE VOUCHER IN TALLY
         |--------------------------------------------------------------------------
+        | TallyVoucherService::create() returns bool
+        | true  = voucher created successfully in Tally
+        | false = something failed (connection, XML error, Tally rejection)
         */
 
-        $response = app(
-            TallyVoucherService::class
-        )->create($order);
+        $result = app(TallyVoucherService::class)->create($order);
+
+        Log::info('TALLY SERVICE RESULT', [
+            'order_number' => $order['number'] ?? null,
+            'result'       => $result,
+        ]);
 
         /*
         |--------------------------------------------------------------------------
         | SUCCESS
         |--------------------------------------------------------------------------
+        | TallyVoucherService returns bool — check strictly
         */
 
-        if ($response === true) {
+        if ($result === true) {
 
             $tallyOrder->update([
-
                 'sync_status' => 'success',
-
-                'synced_at' => now(),
-
-                'last_error' => null,
-
+                'synced_at'   => now(),
                 'retry_count' => $this->attempts(),
+                'last_error'  => null,
             ]);
 
-            Log::info('TALLY JOB SUCCESS', [
-
-                'order_number' => (
-                    $order['order_number'] ?? null
-                ),
+            Log::info('TALLY SYNC SUCCESS', [
+                'order_number'   => $order['number'] ?? null,
+                'invoice_number' => $order['invoice_number'] ?? null,
+                'customer'       => $tallyOrder->customer_name,
+                'amount'         => $tallyOrder->amount,
             ]);
 
             return;
@@ -179,57 +192,53 @@ class SyncOrderToTallyJob implements ShouldQueue
 
         /*
         |--------------------------------------------------------------------------
-        | FAILURE
+        | FAILURE → THROW EXCEPTION
         |--------------------------------------------------------------------------
+        | Job will retry based on $backoff setting
+        | After $tries exhausted → failed() method is called
         */
 
         throw new \Exception(
-            'Voucher creation failed'
+            'Tally voucher creation returned false for order: ' .
+            ($order['number'] ?? $this->orderId)
         );
     }
+    /*
+    |--------------------------------------------------------------------------
+    | UNIQUE JOB ID
+    |--------------------------------------------------------------------------
+    */
 
+    public function uniqueId(): int
+    {
+        return $this->orderId;
+    }
     /*
     |--------------------------------------------------------------------------
     | FAILED
     |--------------------------------------------------------------------------
+    | Called when all retries exhausted
     */
 
-    public function failed(
-        Throwable $exception
-    ): void {
-
-        $tallyOrder = TallyOrder::find(
-            $this->orderId
-        );
+    public function failed(Throwable $exception): void
+    {
+        $tallyOrder = TallyOrder::find($this->orderId);
 
         if (!$tallyOrder) {
             return;
         }
 
         $tallyOrder->update([
-
             'sync_status' => 'failed',
-
             'retry_count' => $this->attempts(),
-
-            'last_error' => substr(
-                $exception->getMessage(),
-                0,
-                1000
-            ),
+            'last_error'  => substr($exception->getMessage(), 0, 2000),
         ]);
 
-        Log::error('TALLY JOB FAILED', [
-
-            'order_id' => $this->orderId,
-
-            'order_number' => (
-                $tallyOrder->order_number ?? null
-            ),
-
-            'attempt' => $this->attempts(),
-
-            'message' => $exception->getMessage(),
+        Log::error('TALLY JOB PERMANENTLY FAILED', [
+            'db_order_id'  => $this->orderId,
+            'order_number' => $tallyOrder->order_number,
+            'attempt'      => $this->attempts(),
+            'message'      => $exception->getMessage(),
         ]);
     }
 }

@@ -273,9 +273,7 @@ class DashboardController extends Controller
         }
 
         $order->update([
-
-            'sync_status' => 'retrying',
-
+            'sync_status' => 'pending',
             'last_error' => null,
         ]);
 

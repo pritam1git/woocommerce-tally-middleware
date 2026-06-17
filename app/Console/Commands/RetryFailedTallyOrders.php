@@ -14,16 +14,32 @@ class RetryFailedTallyOrders extends Command
 
     public function handle()
     {
-        $orders = TallyOrder::whereIn('sync_status', [
-            'failed',
-            'pending'
-        ])->get();
+        $orders = TallyOrder::where('sync_status', 'failed')
+            ->orderBy('id')
+            ->get();
+
+        if ($orders->isEmpty()) {
+            $this->info('No failed orders found.');
+            return;
+        }
+
+        $this->info("Found {$orders->count()} failed orders. Retrying...");
 
         foreach ($orders as $order) {
 
+            // Reset karo pehle
+            $order->update([
+                'sync_status' => 'pending',
+                'retry_count' => 0,
+                'last_error'  => null,
+            ]);
+
             SyncOrderToTallyJob::dispatch($order->id);
+
+            $this->line("  Queued: #{$order->order_number} (DB ID: {$order->id})");
         }
 
-        $this->info('Retry jobs dispatched successfully');
+        $this->info('Done. Make sure queue worker is running:');
+        $this->line('php artisan queue:work --tries=3 --timeout=120');
     }
 }
