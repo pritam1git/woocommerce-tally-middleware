@@ -162,9 +162,18 @@ class TallyVoucherService
                 $order['shipping_total'] ?? 0
             );
 
-            $discountTotal = (float) (
+            $couponDiscount = (float) (
                 $order['discount_total'] ?? 0
             );
+
+            $pointsRedeemed = (float) (
+                $metaData['points_redeemed'] ?? 0
+            );
+
+            $pointsDiscount = $pointsRedeemed / 100;
+
+            $discountTotal = $couponDiscount + $pointsDiscount;
+
 
             $platformFee = (float) (
                 $order['platform_fee'] ?? 0
@@ -363,31 +372,31 @@ class TallyVoucherService
 
                 $inventoryEntries .= "
 
-<ALLINVENTORYENTRIES.LIST>
+                                    <ALLINVENTORYENTRIES.LIST>
 
-    <STOCKITEMNAME>{$this->xml($itemName)}</STOCKITEMNAME>
+                                        <STOCKITEMNAME>{$this->xml($itemName)}</STOCKITEMNAME>
 
-    <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                                        <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
 
-    <RATE>{$rate}/{$unit}</RATE>
+                                        <RATE>{$rate}/{$unit}</RATE>
 
-    <AMOUNT>-" . round($taxableAmount, 2) . "</AMOUNT>
+                                        <AMOUNT>-" . round($taxableAmount, 2) . "</AMOUNT>
 
-    <ACTUALQTY>{$qty} {$unit}</ACTUALQTY>
+                                        <ACTUALQTY>{$qty} {$unit}</ACTUALQTY>
 
-    <BILLEDQTY>{$qty} {$unit}</BILLEDQTY>
+                                        <BILLEDQTY>{$qty} {$unit}</BILLEDQTY>
 
-    <ACCOUNTINGALLOCATIONS.LIST>
+                                        <ACCOUNTINGALLOCATIONS.LIST>
 
-        <LEDGERNAME>{$this->xml($salesLedger)}</LEDGERNAME>
+                                            <LEDGERNAME>{$this->xml($salesLedger)}</LEDGERNAME>
 
-        <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
 
-        <AMOUNT>-" . round($taxableAmount, 2) . "</AMOUNT>
+                                            <AMOUNT>-" . round($taxableAmount, 2) . "</AMOUNT>
 
-    </ACCOUNTINGALLOCATIONS.LIST>
+                                        </ACCOUNTINGALLOCATIONS.LIST>
 
-</ALLINVENTORYENTRIES.LIST>";
+                                    </ALLINVENTORYENTRIES.LIST>";
             }
 
             /*
@@ -398,17 +407,17 @@ class TallyVoucherService
 
             $ledgerEntries .= "
 
-<LEDGERENTRIES.LIST>
+                                <LEDGERENTRIES.LIST>
 
-    <LEDGERNAME>{$this->xml($customerName)}</LEDGERNAME>
+                                    <LEDGERNAME>{$this->xml($customerName)}</LEDGERNAME>
 
-    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+                                    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
 
-    <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
+                                    <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
 
-    <AMOUNT>" . round($finalTotal, 2) . "</AMOUNT>
+                                    <AMOUNT>" . round($finalTotal, 2) . "</AMOUNT>
 
-</LEDGERENTRIES.LIST>";
+                                </LEDGERENTRIES.LIST>";
 
             /*
             |--------------------------------------------------------------------------
@@ -437,15 +446,15 @@ class TallyVoucherService
 
                 $ledgerEntries .= "
 
-<LEDGERENTRIES.LIST>
+                                <LEDGERENTRIES.LIST>
 
-    <LEDGERNAME>{$this->xml($ledgerName)}</LEDGERNAME>
+                                    <LEDGERNAME>{$this->xml($ledgerName)}</LEDGERNAME>
 
-    <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                                    <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
 
-    <AMOUNT>-" . round($amount, 2) . "</AMOUNT>
+                                    <AMOUNT>-" . round($amount, 2) . "</AMOUNT>
 
-</LEDGERENTRIES.LIST>";
+                                </LEDGERENTRIES.LIST>";
             }
 
             /*
@@ -468,15 +477,15 @@ class TallyVoucherService
 
                 $ledgerEntries .= "
 
-<LEDGERENTRIES.LIST>
+                                <LEDGERENTRIES.LIST>
 
-    <LEDGERNAME>{$this->xml($shippingLedger)}</LEDGERNAME>
+                                    <LEDGERNAME>{$this->xml($shippingLedger)}</LEDGERNAME>
 
-    <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                                    <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
 
-    <AMOUNT>-" . round($shippingTotal, 2) . "</AMOUNT>
+                                    <AMOUNT>-" . round($shippingTotal, 2) . "</AMOUNT>
 
-</LEDGERENTRIES.LIST>";
+                                </LEDGERENTRIES.LIST>";
             }
 
             /*
@@ -499,28 +508,31 @@ class TallyVoucherService
 
                 $ledgerEntries .= "
 
-<LEDGERENTRIES.LIST>
+                                    <LEDGERENTRIES.LIST>
 
-    <LEDGERNAME>{$this->xml($platformLedger)}</LEDGERNAME>
+                                        <LEDGERNAME>{$this->xml($platformLedger)}</LEDGERNAME>
 
-    <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                                        <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
 
-    <AMOUNT>-" . round($platformFee, 2) . "</AMOUNT>
+                                        <AMOUNT>-" . round($platformFee, 2) . "</AMOUNT>
 
-</LEDGERENTRIES.LIST>";
+                                    </LEDGERENTRIES.LIST>";
             }
 
             /*
             |--------------------------------------------------------------------------
             | DISCOUNT
             |--------------------------------------------------------------------------
+            | Discount = expense for company → Debit side in Sales voucher
+            | ISDEEMEDPOSITIVE = No → Debit
+            | AMOUNT = positive (no minus sign)
             */
 
             if ($discountTotal > 0) {
 
                 $discountLedger = config(
                     'tally.discount_ledger',
-                    'Discount Allowed'
+                    'DISCOUNT ALLOWED'
                 );
 
                 $this->createSimpleLedger(
@@ -530,15 +542,15 @@ class TallyVoucherService
 
                 $ledgerEntries .= "
 
-<LEDGERENTRIES.LIST>
+                <LEDGERENTRIES.LIST>
 
-    <LEDGERNAME>{$this->xml($discountLedger)}</LEDGERNAME>
+                    <LEDGERNAME>{$this->xml($discountLedger)}</LEDGERNAME>
 
-    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+                    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
 
-    <AMOUNT>" . round($discountTotal, 2) . "</AMOUNT>
+                    <AMOUNT>" . round($discountTotal, 2) . "</AMOUNT>
 
-</LEDGERENTRIES.LIST>";
+                </LEDGERENTRIES.LIST>";
             }
 
             /*
@@ -565,258 +577,258 @@ class TallyVoucherService
 
             $xml = "
 
-<ENVELOPE>
+                    <ENVELOPE>
 
-<HEADER>
+                    <HEADER>
 
-<TALLYREQUEST>Import Data</TALLYREQUEST>
+                    <TALLYREQUEST>Import Data</TALLYREQUEST>
 
-</HEADER>
+                    </HEADER>
 
-<BODY>
+                    <BODY>
 
-<IMPORTDATA>
+                    <IMPORTDATA>
 
-<REQUESTDESC>
+                    <REQUESTDESC>
 
-<REPORTNAME>Vouchers</REPORTNAME>
+                    <REPORTNAME>Vouchers</REPORTNAME>
 
-<STATICVARIABLES>
+                    <STATICVARIABLES>
 
-<SVCURRENTCOMPANY>" . $this->xml(
-                config('tally.company_name')
-            ) . "</SVCURRENTCOMPANY>
+                    <SVCURRENTCOMPANY>" . $this->xml(
+                                    config('tally.company_name')
+                                ) . "</SVCURRENTCOMPANY>
 
-</STATICVARIABLES>
+                    </STATICVARIABLES>
 
-</REQUESTDESC>
+                    </REQUESTDESC>
 
-<REQUESTDATA>
+                    <REQUESTDATA>
 
-<TALLYMESSAGE xmlns:UDF='TallyUDF'>
+                    <TALLYMESSAGE xmlns:UDF='TallyUDF'>
 
-<VOUCHER
-    VCHTYPE='Sales'
-    ACTION='Create Alter'
-    OBJVIEW='Invoice Voucher View'
->
+                    <VOUCHER
+                        VCHTYPE='Sales'
+                        ACTION='Create Alter'
+                        OBJVIEW='Invoice Voucher View'
+                    >
 
-    <DATE>{$voucherDate}</DATE>
+                        <DATE>{$voucherDate}</DATE>
 
-    <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+                        <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
 
-    <VOUCHERNUMBER>{$this->xml($invoiceNumber)}</VOUCHERNUMBER>
+                        <VOUCHERNUMBER>{$this->xml($invoiceNumber)}</VOUCHERNUMBER>
 
-    <REFERENCE>{$this->xml($invoiceNumber)}</REFERENCE>
+                        <REFERENCE>{$this->xml($invoiceNumber)}</REFERENCE>
 
-    <ORDERNO>{$this->xml($buyerOrderNumber)}</ORDERNO>
+                        <ORDERNO>{$this->xml($buyerOrderNumber)}</ORDERNO>
 
-    <PARTYLEDGERNAME>{$this->xml($customerName)}</PARTYLEDGERNAME>
+                        <PARTYLEDGERNAME>{$this->xml($customerName)}</PARTYLEDGERNAME>
 
-    <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
+                        <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
 
-    <ISINVOICE>Yes</ISINVOICE>
+                        <ISINVOICE>Yes</ISINVOICE>
 
-    <BASICBUYERNAME>{$this->xml($customerName)}</BASICBUYERNAME>
+                        <BASICBUYERNAME>{$this->xml($customerName)}</BASICBUYERNAME>
 
-    <BASICBASEPARTYNAME>{$this->xml($customerName)}</BASICBASEPARTYNAME>
+                        <BASICBASEPARTYNAME>{$this->xml($customerName)}</BASICBASEPARTYNAME>
 
-    <BUYERSORDERNO>{$this->xml($buyerOrderNumber)}</BUYERSORDERNO>
+                        <BUYERSORDERNO>{$this->xml($buyerOrderNumber)}</BUYERSORDERNO>
 
-    <BASICBUYERORDERNO>{$this->xml($buyerOrderNumber)}</BASICBUYERORDERNO>
+                        <BASICBUYERORDERNO>{$this->xml($buyerOrderNumber)}</BASICBUYERORDERNO>
 
-    <BASICORDERREF>{$this->xml($buyerOrderNumber)}</BASICORDERREF>
+                        <BASICORDERREF>{$this->xml($buyerOrderNumber . ' - Order No')}</BASICORDERREF>
 
-    <CONSIGNEENAME>{$this->xml($customerName)}</CONSIGNEENAME>
+                        <CONSIGNEENAME>{$this->xml($customerName)}</CONSIGNEENAME>
 
-    <BASICBUYERADDRESS>{$this->xml($fullAddress)}</BASICBUYERADDRESS>
+                        <BASICBUYERADDRESS>{$this->xml($fullAddress)}</BASICBUYERADDRESS>
 
-    <BASICBUYERSTATE>{$this->xml($customerState)}</BASICBUYERSTATE>
+                        <BASICBUYERSTATE>{$this->xml($customerState)}</BASICBUYERSTATE>
 
-    <BASICBUYERPINCODE>{$this->xml($pincode)}</BASICBUYERPINCODE>
+                        <BASICBUYERPINCODE>{$this->xml($pincode)}</BASICBUYERPINCODE>
 
-    <BASICBUYERCOUNTRY>India</BASICBUYERCOUNTRY>
+                        <BASICBUYERCOUNTRY>India</BASICBUYERCOUNTRY>
 
-    <NARRATION>{$narration}</NARRATION>
+                        <NARRATION>{$narration}</NARRATION>
 
-    {$inventoryEntries}
+                        {$inventoryEntries}
 
-    {$ledgerEntries}
+                        {$ledgerEntries}
 
-</VOUCHER>
+                    </VOUCHER>
 
-</TALLYMESSAGE>
+                    </TALLYMESSAGE>
 
-</REQUESTDATA>
+                    </REQUESTDATA>
 
-</IMPORTDATA>
+                    </IMPORTDATA>
 
-</BODY>
+                    </BODY>
 
-</ENVELOPE>";
+                    </ENVELOPE>";
 
-            Log::info('FINAL TALLY XML', [
-                'xml' => $xml
-            ]);
+                                Log::info('FINAL TALLY XML', [
+                                    'xml' => $xml
+                                ]);
 
-            /*
-            |--------------------------------------------------------------------------
-            | SEND XML
-            |--------------------------------------------------------------------------
-            */
+                                /*
+                                |--------------------------------------------------------------------------
+                                | SEND XML
+                                |--------------------------------------------------------------------------
+                                */
 
-            $response = $this->client->send(
-                $xml,
-                'VOUCHER'
-            );
-
-            Log::info('TALLY RESPONSE', [
-                'response' => $response
-            ]);
-
-            if (empty($response)) {
-
-                Log::error('TALLY EMPTY RESPONSE');
+                                $response = $this->client->send(
+                                    $xml,
+                                    'VOUCHER'
+                                );
+
+                                Log::info('TALLY RESPONSE', [
+                                    'response' => $response
+                                ]);
+
+                                if (empty($response)) {
+
+                                    Log::error('TALLY EMPTY RESPONSE');
 
-                return false;
-            }
+                                    return false;
+                                }
 
-            $success =
-                str_contains(
-                    $response,
-                    '<CREATED>1</CREATED>'
-                ) ||
-                str_contains(
-                    $response,
-                    '<ALTERED>1</ALTERED>'
-                ) ||
-                str_contains(
-                    $response,
-                    '<COMBINED>1</COMBINED>'
-                );
+                                $success =
+                                    str_contains(
+                                        $response,
+                                        '<CREATED>1</CREATED>'
+                                    ) ||
+                                    str_contains(
+                                        $response,
+                                        '<ALTERED>1</ALTERED>'
+                                    ) ||
+                                    str_contains(
+                                        $response,
+                                        '<COMBINED>1</COMBINED>'
+                                    );
 
-            if (!$success) {
+                                if (!$success) {
 
-                preg_match(
-                    '/<LINEERROR>(.*?)<\/LINEERROR>/s',
-                    $response,
-                    $m
-                );
+                                    preg_match(
+                                        '/<LINEERROR>(.*?)<\/LINEERROR>/s',
+                                        $response,
+                                        $m
+                                    );
 
-                Log::error(
-                    'TALLY VOUCHER FAILED',
-                    [
-                        'error' => html_entity_decode(
-                            $m[1] ?? 'Unknown'
-                        ),
-                    ]
-                );
-            }
+                                    Log::error(
+                                        'TALLY VOUCHER FAILED',
+                                        [
+                                            'error' => html_entity_decode(
+                                                $m[1] ?? 'Unknown'
+                                            ),
+                                        ]
+                                    );
+                                }
 
-            return $success;
+                                return $success;
 
-        } catch (\Throwable $e) {
+                            } catch (\Throwable $e) {
 
-            Log::error(
-                'TALLY VOUCHER EXCEPTION',
-                [
-                    'message' => $e->getMessage(),
-                    'line'    => $e->getLine(),
-                    'file'    => $e->getFile(),
-                ]
-            );
+                                Log::error(
+                                    'TALLY VOUCHER EXCEPTION',
+                                    [
+                                        'message' => $e->getMessage(),
+                                        'line'    => $e->getLine(),
+                                        'file'    => $e->getFile(),
+                                    ]
+                                );
 
-            return false;
-        }
-    }
+                                return false;
+                            }
+                        }
 
-    /*
-    |--------------------------------------------------------------------------
-    | PARTY LEDGER
-    |--------------------------------------------------------------------------
-    */
+                        /*
+                        |--------------------------------------------------------------------------
+                        | PARTY LEDGER
+                        |--------------------------------------------------------------------------
+                        */
 
-    private function createPartyLedger(
-        string $customerName,
-        string $state,
-        string $address,
-        string $city,
-        string $pincode,
-        string $phone,
-        string $email
-    ): void {
+                        private function createPartyLedger(
+                            string $customerName,
+                            string $state,
+                            string $address,
+                            string $city,
+                            string $pincode,
+                            string $phone,
+                            string $email
+                        ): void {
 
-        $fullAddress = trim(
-            $address . ', ' . $city . ' - ' . $pincode
-        );
+                            $fullAddress = trim(
+                                $address . ', ' . $city . ' - ' . $pincode
+                            );
 
-        $xml = "
+                            $xml = "
 
-<ENVELOPE>
+                    <ENVELOPE>
 
-<HEADER>
+                    <HEADER>
 
-<TALLYREQUEST>Import Data</TALLYREQUEST>
+                    <TALLYREQUEST>Import Data</TALLYREQUEST>
 
-</HEADER>
+                    </HEADER>
 
-<BODY>
+                    <BODY>
 
-<IMPORTDATA>
+                    <IMPORTDATA>
 
-<REQUESTDESC>
+                    <REQUESTDESC>
 
-<REPORTNAME>All Masters</REPORTNAME>
+                    <REPORTNAME>All Masters</REPORTNAME>
 
-<STATICVARIABLES>
+                    <STATICVARIABLES>
 
-<SVCURRENTCOMPANY>" . $this->xml(
-            config('tally.company_name')
-        ) . "</SVCURRENTCOMPANY>
+                    <SVCURRENTCOMPANY>" . $this->xml(
+                                config('tally.company_name')
+                            ) . "</SVCURRENTCOMPANY>
 
-</STATICVARIABLES>
+                    </STATICVARIABLES>
 
-</REQUESTDESC>
+                    </REQUESTDESC>
 
-<REQUESTDATA>
+                    <REQUESTDATA>
 
-<TALLYMESSAGE xmlns:UDF='TallyUDF'>
+                    <TALLYMESSAGE xmlns:UDF='TallyUDF'>
 
-<LEDGER NAME='" . $this->xml($customerName) . "' ACTION='Create Alter'>
+                    <LEDGER NAME='" . $this->xml($customerName) . "' ACTION='Create Alter'>
 
-    <NAME>" . $this->xml($customerName) . "</NAME>
+                        <NAME>" . $this->xml($customerName) . "</NAME>
 
-    <PARENT>Sundry Debtors</PARENT>
+                        <PARENT>Sundry Debtors</PARENT>
 
-    <MAILINGNAME>" . $this->xml($customerName) . "</MAILINGNAME>
+                        <MAILINGNAME>" . $this->xml($customerName) . "</MAILINGNAME>
 
-    <ADDRESS>" . $this->xml($address) . "</ADDRESS>
+                        <ADDRESS>" . $this->xml($address) . "</ADDRESS>
 
-    <ADDRESS>" . $this->xml($city) . "</ADDRESS>
+                        <ADDRESS>" . $this->xml($city) . "</ADDRESS>
 
-    <ADDRESS>" . $this->xml($pincode) . "</ADDRESS>
+                        <ADDRESS>" . $this->xml($pincode) . "</ADDRESS>
 
-    <LEDSTATENAME>" . $this->xml($state) . "</LEDSTATENAME>
+                        <LEDSTATENAME>" . $this->xml($state) . "</LEDSTATENAME>
 
-    <COUNTRYNAME>India</COUNTRYNAME>
+                        <COUNTRYNAME>India</COUNTRYNAME>
 
-    <LEDGERPHONE>" . $this->xml($phone) . "</LEDGERPHONE>
+                        <LEDGERPHONE>" . $this->xml($phone) . "</LEDGERPHONE>
 
-    <EMAIL>" . $this->xml($email) . "</EMAIL>
+                        <EMAIL>" . $this->xml($email) . "</EMAIL>
 
-    <ISBILLWISEON>Yes</ISBILLWISEON>
+                        <ISBILLWISEON>Yes</ISBILLWISEON>
 
-</LEDGER>
+                    </LEDGER>
 
-</TALLYMESSAGE>
+                    </TALLYMESSAGE>
 
-</REQUESTDATA>
+                    </REQUESTDATA>
 
-</IMPORTDATA>
+                    </IMPORTDATA>
 
-</BODY>
+                    </BODY>
 
-</ENVELOPE>";
+                    </ENVELOPE>";
 
         $response = $this->client->send(
             $xml,
@@ -847,55 +859,55 @@ class TallyVoucherService
 
         $xml = "
 
-<ENVELOPE>
+                <ENVELOPE>
 
-<HEADER>
+                <HEADER>
 
-<TALLYREQUEST>Import Data</TALLYREQUEST>
+                <TALLYREQUEST>Import Data</TALLYREQUEST>
 
-</HEADER>
+                </HEADER>
 
-<BODY>
+                <BODY>
 
-<IMPORTDATA>
+                <IMPORTDATA>
 
-<REQUESTDESC>
+                <REQUESTDESC>
 
-<REPORTNAME>All Masters</REPORTNAME>
+                <REPORTNAME>All Masters</REPORTNAME>
 
-<STATICVARIABLES>
+                <STATICVARIABLES>
 
-<SVCURRENTCOMPANY>" . $this->xml(
-            config('tally.company_name')
-        ) . "</SVCURRENTCOMPANY>
+                <SVCURRENTCOMPANY>" . $this->xml(
+                            config('tally.company_name')
+                        ) . "</SVCURRENTCOMPANY>
 
-</STATICVARIABLES>
+                </STATICVARIABLES>
 
-</REQUESTDESC>
+                </REQUESTDESC>
 
-<REQUESTDATA>
+                <REQUESTDATA>
 
-<TALLYMESSAGE xmlns:UDF='TallyUDF'>
+                <TALLYMESSAGE xmlns:UDF='TallyUDF'>
 
-<STOCKITEM NAME='" . $this->xml($itemName) . "' ACTION='Create Alter'>
+                <STOCKITEM NAME='" . $this->xml($itemName) . "' ACTION='Create Alter'>
 
-    <NAME>" . $this->xml($itemName) . "</NAME>
+                    <NAME>" . $this->xml($itemName) . "</NAME>
 
-    <PARENT>" . $this->xml($group) . "</PARENT>
+                    <PARENT>" . $this->xml($group) . "</PARENT>
 
-    <BASEUNITS>{$unit}</BASEUNITS>
+                    <BASEUNITS>{$unit}</BASEUNITS>
 
-</STOCKITEM>
+                </STOCKITEM>
 
-</TALLYMESSAGE>
+                </TALLYMESSAGE>
 
-</REQUESTDATA>
+                </REQUESTDATA>
 
-</IMPORTDATA>
+                </IMPORTDATA>
 
-</BODY>
+                </BODY>
 
-</ENVELOPE>";
+                </ENVELOPE>";
 
         $response = $this->client->send(
             $xml,
@@ -921,53 +933,53 @@ class TallyVoucherService
 
         $xml = "
 
-<ENVELOPE>
+                <ENVELOPE>
 
-<HEADER>
+                <HEADER>
 
-<TALLYREQUEST>Import Data</TALLYREQUEST>
+                <TALLYREQUEST>Import Data</TALLYREQUEST>
 
-</HEADER>
+                </HEADER>
 
-<BODY>
+                <BODY>
 
-<IMPORTDATA>
+                <IMPORTDATA>
 
-<REQUESTDESC>
+                <REQUESTDESC>
 
-<REPORTNAME>All Masters</REPORTNAME>
+                <REPORTNAME>All Masters</REPORTNAME>
 
-<STATICVARIABLES>
+                <STATICVARIABLES>
 
-<SVCURRENTCOMPANY>" . $this->xml(
-            config('tally.company_name')
-        ) . "</SVCURRENTCOMPANY>
+                <SVCURRENTCOMPANY>" . $this->xml(
+                            config('tally.company_name')
+                        ) . "</SVCURRENTCOMPANY>
 
-</STATICVARIABLES>
+                </STATICVARIABLES>
 
-</REQUESTDESC>
+                </REQUESTDESC>
 
-<REQUESTDATA>
+                <REQUESTDATA>
 
-<TALLYMESSAGE xmlns:UDF='TallyUDF'>
+                <TALLYMESSAGE xmlns:UDF='TallyUDF'>
 
-<LEDGER NAME='" . $this->xml($ledgerName) . "' ACTION='Create Alter'>
+                <LEDGER NAME='" . $this->xml($ledgerName) . "' ACTION='Create Alter'>
 
-    <NAME>" . $this->xml($ledgerName) . "</NAME>
+                    <NAME>" . $this->xml($ledgerName) . "</NAME>
 
-    <PARENT>" . $this->xml($parent) . "</PARENT>
+                    <PARENT>" . $this->xml($parent) . "</PARENT>
 
-</LEDGER>
+                </LEDGER>
 
-</TALLYMESSAGE>
+                </TALLYMESSAGE>
 
-</REQUESTDATA>
+                </REQUESTDATA>
 
-</IMPORTDATA>
+                </IMPORTDATA>
 
-</BODY>
+                </BODY>
 
-</ENVELOPE>";
+                </ENVELOPE>";
 
         $this->client->send(
             $xml,

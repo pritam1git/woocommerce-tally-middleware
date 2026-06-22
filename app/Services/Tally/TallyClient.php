@@ -50,7 +50,10 @@ class TallyClient
 
                 return false;
             }
-
+            if (str_contains($responseBody, '<EXCEPTIONS>1</EXCEPTIONS>')) {
+                // Full XML log karo
+                Log::error('TALLY EXCEPTION DETAIL', ['full_response' => $responseBody]);
+            }
             /*
             |--------------------------------------------------------------------------
             | SUCCESS RESPONSE

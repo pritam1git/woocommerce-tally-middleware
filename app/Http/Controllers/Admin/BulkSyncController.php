@@ -42,13 +42,20 @@ class BulkSyncController extends Controller
         $request->validate([
             'from'   => 'required|date',
             'to'     => 'required|date|after_or_equal:from',
-            'status' => 'nullable|in:processing,completed,all',
+            'status' => 'nullable|in:processing,completed,ready-to-ship,shipped,delivered,all',
         ]);
 
         $from     = Carbon::parse($request->from)->startOfDay();
         $to       = Carbon::parse($request->to)->endOfDay();
         $status   = $request->status ?? 'all';
-        $statuses = $status === 'all' ? ['processing', 'completed'] : [$status];
+        $statuses = match($status) {
+            'processing'    => ['processing'],
+            'completed'     => ['completed'],
+            'ready-to-ship' => ['ready-to-ship'],
+            'shipped'     => ['shipped'],
+            'delivered'     => ['delivered'],
+            default         => ['processing', 'completed', 'ready-to-ship', 'shipped', 'delivered'],
+        };
 
         $wcUrl = config('services.woocommerce.url');
         $ckKey = config('services.woocommerce.consumer_key');
@@ -75,12 +82,12 @@ class BulkSyncController extends Controller
                 do {
 
                     $response = Http::withBasicAuth($ckKey, $csKey)
-                        ->timeout(30)
+                        ->timeout(120)
                         ->get("{$wcUrl}/wp-json/wc/v3/orders", [
                             'status'   => $s,
                             'after'    => $from->toIso8601String(),
                             'before'   => $to->toIso8601String(),
-                            'per_page' => 100,
+                            'per_page' => 50,
                             'page'     => $page,
                             'orderby'  => 'date',
                             'order'    => 'asc',
@@ -160,13 +167,20 @@ class BulkSyncController extends Controller
         $request->validate([
             'from'   => 'required|date',
             'to'     => 'required|date|after_or_equal:from',
-            'status' => 'nullable|in:processing,completed,all',
+            'status' => 'nullable|in:processing,completed,ready-to-ship,shipped,delivered,all',
         ]);
 
         $from     = Carbon::parse($request->from)->startOfDay();
         $to       = Carbon::parse($request->to)->endOfDay();
         $status   = $request->status ?? 'all';
-        $statuses = $status === 'all' ? ['processing', 'completed'] : [$status];
+        $statuses = match($status) {
+            'processing'    => ['processing'],
+            'completed'     => ['completed'],
+            'ready-to-ship' => ['ready-to-ship'],
+            'shipped'     => ['shipped'],
+            'delivered'     => ['delivered'],
+            default         => ['processing', 'completed', 'ready-to-ship', 'shipped', 'delivered'],
+        };
 
         $wcUrl = config('services.woocommerce.url');
         $ckKey = config('services.woocommerce.consumer_key');
@@ -192,12 +206,12 @@ class BulkSyncController extends Controller
                 do {
 
                     $response = Http::withBasicAuth($ckKey, $csKey)
-                        ->timeout(30)
+                        ->timeout(120)
                         ->get("{$wcUrl}/wp-json/wc/v3/orders", [
                             'status'   => $s,
                             'after'    => $from->toIso8601String(),
                             'before'   => $to->toIso8601String(),
-                            'per_page' => 100,
+                            'per_page' => 50,
                             'page'     => $page,
                             'orderby'  => 'date',
                             'order'    => 'asc',

@@ -313,150 +313,150 @@
             width:14px;
             height:14px;
         }
-.top-header{
-    background:linear-gradient(135deg,#ffffff,#f7fee7,#ecfccb);
-    padding:32px;
-    border-radius:28px;
-    box-shadow:0 12px 35px rgba(0,0,0,0.06);
-    margin-bottom:30px;
-    border:1px solid rgba(132,204,22,0.15);
-    position:relative;
-}
+        .top-header{
+            background:linear-gradient(135deg,#ffffff,#f7fee7,#ecfccb);
+            padding:32px;
+            border-radius:28px;
+            box-shadow:0 12px 35px rgba(0,0,0,0.06);
+            margin-bottom:30px;
+            border:1px solid rgba(132,204,22,0.15);
+            position:relative;
+        }
 
-.dashboard-badge{
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    background:rgba(34,197,94,0.12);
-    color:#15803d;
-    padding:8px 16px;
-    border-radius:50px;
-    font-size:12px;
-    font-weight:700;
-    letter-spacing:.5px;
-    backdrop-filter:blur(10px);
-}
+        .dashboard-badge{
+            display:inline-flex;
+            align-items:center;
+            gap:8px;
+            background:rgba(34,197,94,0.12);
+            color:#15803d;
+            padding:8px 16px;
+            border-radius:50px;
+            font-size:12px;
+            font-weight:700;
+            letter-spacing:.5px;
+            backdrop-filter:blur(10px);
+        }
 
-.dashboard-title{
-    font-size:38px;
-    font-weight:800;
-    margin:0;
-    color:#14532d;
-    line-height:1.2;
-}
+        .dashboard-title{
+            font-size:38px;
+            font-weight:800;
+            margin:0;
+            color:#14532d;
+            line-height:1.2;
+        }
 
-.dashboard-subtitle{
-    margin-top:8px;
-    color:#4b5563;
-    font-size:16px;
-    font-weight:500;
-}
+        .dashboard-subtitle{
+            margin-top:8px;
+            color:#4b5563;
+            font-size:16px;
+            font-weight:500;
+        }
 
-.refresh-btn-new{
-    background:linear-gradient(135deg,#111827,#1f2937);
-    color:white;
-    border:none;
-    border-radius:50px;
-    padding:13px 24px;
-    font-size:15px;
-    font-weight:600;
-    box-shadow:0 10px 25px rgba(0,0,0,0.12);
-    transition:.3s;
-}
+        .refresh-btn-new{
+            background:linear-gradient(135deg,#111827,#1f2937);
+            color:white;
+            border:none;
+            border-radius:50px;
+            padding:13px 24px;
+            font-size:15px;
+            font-weight:600;
+            box-shadow:0 10px 25px rgba(0,0,0,0.12);
+            transition:.3s;
+        }
 
-.refresh-btn-new:hover{
-    transform:translateY(-2px);
-    color:white;
-}
+        .refresh-btn-new:hover{
+            transform:translateY(-2px);
+            color:white;
+        }
 
-.floating-ball{
-    position:absolute;
-    border-radius:50%;
-    filter:blur(2px);
-    opacity:.45;
-    animation:floatMove 10s infinite ease-in-out;
-}
+        .floating-ball{
+            position:absolute;
+            border-radius:50%;
+            filter:blur(2px);
+            opacity:.45;
+            animation:floatMove 10s infinite ease-in-out;
+        }
 
-.ball-1{
-    width:90px;
-    height:90px;
-    background:#bef264;
-    top:-20px;
-    right:120px;
-    animation-delay:0s;
-}
+        .ball-1{
+            width:90px;
+            height:90px;
+            background:#bef264;
+            top:-20px;
+            right:120px;
+            animation-delay:0s;
+        }
 
-.ball-2{
-    width:55px;
-    height:55px;
-    background:#86efac;
-    bottom:10px;
-    right:40px;
-    animation-delay:2s;
-}
+        .ball-2{
+            width:55px;
+            height:55px;
+            background:#86efac;
+            bottom:10px;
+            right:40px;
+            animation-delay:2s;
+        }
 
-.ball-3{
-    width:70px;
-    height:70px;
-    background:#fde047;
-    top:40%;
-    left:45%;
-    animation-delay:4s;
-}
+        .ball-3{
+            width:70px;
+            height:70px;
+            background:#fde047;
+            top:40%;
+            left:45%;
+            animation-delay:4s;
+        }
 
-.ball-4{
-    width:35px;
-    height:35px;
-    background:#4ade80;
-    top:15px;
-    left:35%;
-    animation-delay:1s;
-}
+        .ball-4{
+            width:35px;
+            height:35px;
+            background:#4ade80;
+            top:15px;
+            left:35%;
+            animation-delay:1s;
+        }
 
-@keyframes floatMove{
+        @keyframes floatMove{
 
-    0%{
-        transform:translateY(0px) translateX(0px);
-    }
+            0%{
+                transform:translateY(0px) translateX(0px);
+            }
 
-    25%{
-        transform:translateY(-15px) translateX(10px);
-    }
+            25%{
+                transform:translateY(-15px) translateX(10px);
+            }
 
-    50%{
-        transform:translateY(10px) translateX(-10px);
-    }
+            50%{
+                transform:translateY(10px) translateX(-10px);
+            }
 
-    75%{
-        transform:translateY(-8px) translateX(12px);
-    }
+            75%{
+                transform:translateY(-8px) translateX(12px);
+            }
 
-    100%{
-        transform:translateY(0px) translateX(0px);
-    }
+            100%{
+                transform:translateY(0px) translateX(0px);
+            }
 
-}
+        }
 
-@media(max-width:768px){
+        @media(max-width:768px){
 
-    .top-header{
-        padding:24px;
-    }
+            .top-header{
+                padding:24px;
+            }
 
-    .dashboard-title{
-        font-size:28px;
-    }
+            .dashboard-title{
+                font-size:28px;
+            }
 
-    .dashboard-subtitle{
-        font-size:14px;
-    }
+            .dashboard-subtitle{
+                font-size:14px;
+            }
 
-    .refresh-btn-new{
-        width:100%;
-        text-align:center;
-    }
+            .refresh-btn-new{
+                width:100%;
+                text-align:center;
+            }
 
-}
+        }
         @media(max-width:991px){
 
             .search-sort-wrapper{
@@ -524,13 +524,30 @@
 
         <div>
 
-            <div class="dashboard-badge mb-3">
+            <!-- <div class="dashboard-badge mb-3">
 
                 <i class="fa-solid fa-bolt"></i>
 
                 LIVE TALLY CONNECTOR
 
+            </div> -->
+            @if($tallyConnected)
+
+            <div class="dashboard-badge mb-3"
+                style="background:#dcfce7;color:#15803d;">
+                <i class="fa-solid fa-circle-check"></i>
+                TALLY CONNECTED
             </div>
+
+            @else
+
+            <div class="dashboard-badge mb-3"
+                style="background:#fee2e2;color:#dc2626;">
+                <i class="fa-solid fa-circle-xmark"></i>
+                TALLY DISCONNECTED
+            </div>
+
+            @endif
 
             <h1 class="dashboard-title">
                 Tally Middleware Dashboard

@@ -12,19 +12,24 @@ use App\Http\Controllers\Admin\BulkSyncController;
 
 Route::middleware(['auth'])->prefix('admin')->group(function () {
 
-    Route::get('/dashboard', [
-        DashboardController::class,
-        'index'
-    ])->name('admin.dashboard');
-    Route::get('/admin/orders/{id}', [DashboardController::class, 'show'])
-        ->name('admin.orders.show');
+    Route::get('/dashboard', [ DashboardController::class,'index'])->name('admin.dashboard');
 
-    Route::delete('/admin/orders/{id}', [DashboardController::class, 'delete'])
-        ->name('admin.orders.delete');
-    Route::post('/retry/{id}', [
-        DashboardController::class,
-        'retry'
-    ])->name('admin.retry');
+    Route::get('/admin/orders/{id}', [ DashboardController::class, 'show'])->name('admin.orders.show');
+
+    Route::delete('/admin/orders/{id}', [ DashboardController::class, 'delete'])->name('admin.orders.delete');
+
+    Route::post('/retry/{id}', [ DashboardController::class,'retry'])->name('admin.retry');
+    
+    Route::get('/bulk-sync', [BulkSyncController::class, 'index'])->name('admin.bulk-sync');
+
+    Route::post('/bulk-sync/preview', [BulkSyncController::class, 'preview'])->name('admin.bulk-sync.preview');
+
+    Route::post('/bulk-sync/sync', [BulkSyncController::class, 'sync'])->name('admin.bulk-sync.sync');
+
+    Route::get('/bulk-sync/progress', [BulkSyncController::class, 'progress'])->name('admin.bulk-sync.progress');
+
+    Route::post('/bulk-sync/retry-failed', [BulkSyncController::class, 'retryFailed'])->name('admin.bulk-sync.retry-failed');
+
 });
 
 Auth::routes();
@@ -38,20 +43,6 @@ Route::get('/home', function () {
 });
 
 
- 
-// Ye routes existing admin group ke andar add karo
-Route::middleware(['auth'])->prefix('admin')->group(function () {
-    Route::get('/bulk-sync', [BulkSyncController::class, 'index'])
-        ->name('admin.bulk-sync');
-    Route::post('/bulk-sync/preview', [BulkSyncController::class, 'preview'])
-        ->name('admin.bulk-sync.preview');
-    Route::post('/bulk-sync/sync', [BulkSyncController::class, 'sync'])
-        ->name('admin.bulk-sync.sync');
-    Route::get('/bulk-sync/progress', [BulkSyncController::class, 'progress'])
-        ->name('admin.bulk-sync.progress');
-    Route::post('/bulk-sync/retry-failed', [BulkSyncController::class, 'retryFailed'])
-        ->name('admin.bulk-sync.retry-failed');
-});
 
 Route::get('/test-tally', function () {
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use Illuminate\Support\Facades\Http;
 use App\Models\TallyOrder;
 use App\Http\Controllers\Controller;
 use App\Jobs\SyncOrderToTallyJob;
@@ -152,6 +153,20 @@ class DashboardController extends Controller
             ->paginate(20)
             ->withQueryString();
 
+        $tallyConnected = false;
+
+        try {
+
+            $response = Http::timeout(3)
+                ->get(config('tally.url'));
+
+            $tallyConnected = true;
+
+        } catch (\Throwable $e) {
+
+            $tallyConnected = false;
+        }
+
         return view('admin.dashboard', compact(
 
             'todayOrders',
@@ -164,7 +179,9 @@ class DashboardController extends Controller
 
             'stuckOrders',
 
-            'orders'
+            'orders',
+
+            'tallyConnected'
         ));
     }
 
