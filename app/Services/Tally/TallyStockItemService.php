@@ -13,50 +13,50 @@ class TallyStockItemService
         $unit = config('tally.default_unit');
 
         $xml = <<<XML
-<ENVELOPE>
+                <ENVELOPE>
 
- <HEADER>
-  <TALLYREQUEST>Import Data</TALLYREQUEST>
- </HEADER>
+                <HEADER>
+                  <TALLYREQUEST>Import Data</TALLYREQUEST>
+                </HEADER>
 
- <BODY>
+                <BODY>
 
-  <IMPORTDATA>
+                  <IMPORTDATA>
 
-   <REQUESTDESC>
+                  <REQUESTDESC>
 
-    <REPORTNAME>All Masters</REPORTNAME>
+                    <REPORTNAME>All Masters</REPORTNAME>
 
-    <STATICVARIABLES>
-      <SVCURRENTCOMPANY>{$company}</SVCURRENTCOMPANY>
-    </STATICVARIABLES>
+                    <STATICVARIABLES>
+                      <SVCURRENTCOMPANY>{$company}</SVCURRENTCOMPANY>
+                    </STATICVARIABLES>
 
-   </REQUESTDESC>
+                  </REQUESTDESC>
 
-   <REQUESTDATA>
+                  <REQUESTDATA>
 
-    <TALLYMESSAGE>
+                    <TALLYMESSAGE>
 
-      <STOCKITEM NAME="$itemName" ACTION="Create">
+                      <STOCKITEM NAME="$itemName" ACTION="Create">
 
-        <NAME>$itemName</NAME>
+                        <NAME>$itemName</NAME>
 
-        <PARENT>$group</PARENT>
+                        <PARENT>$group</PARENT>
 
-        <BASEUNITS>$unit</BASEUNITS>
+                        <BASEUNITS>$unit</BASEUNITS>
 
-      </STOCKITEM>
+                      </STOCKITEM>
 
-    </TALLYMESSAGE>
+                    </TALLYMESSAGE>
 
-   </REQUESTDATA>
+                  </REQUESTDATA>
 
-  </IMPORTDATA>
+                  </IMPORTDATA>
 
- </BODY>
+                </BODY>
 
-</ENVELOPE>
-XML;
+                </ENVELOPE>
+                XML;
 
         return app(TallyClient::class)
             ->send($xml, 'STOCK ITEM');

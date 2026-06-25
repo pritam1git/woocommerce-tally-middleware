@@ -78,7 +78,7 @@
                             {{-- PRICE --}}
 
                             <div class="text-4xl font-extrabold text-green-400 relative z-20">
-                                ₹1,999
+                                -----
                             </div>
 
                             <div class="text-gray-300 mt-2 text-sm relative z-20">

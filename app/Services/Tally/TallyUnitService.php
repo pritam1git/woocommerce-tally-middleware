@@ -10,44 +10,44 @@ class TallyUnitService
         $company = config('tally.company_name');
 
         $xml = <<<XML
-<ENVELOPE>
- <HEADER>
-  <TALLYREQUEST>Import Data</TALLYREQUEST>
- </HEADER>
+                <ENVELOPE>
+                <HEADER>
+                  <TALLYREQUEST>Import Data</TALLYREQUEST>
+                </HEADER>
 
- <BODY>
-  <IMPORTDATA>
+                <BODY>
+                  <IMPORTDATA>
 
-   <REQUESTDESC>
-    <REPORTNAME>All Masters</REPORTNAME>
+                  <REQUESTDESC>
+                    <REPORTNAME>All Masters</REPORTNAME>
 
-    <STATICVARIABLES>
-      <SVCURRENTCOMPANY>{$company}</SVCURRENTCOMPANY>
-    </STATICVARIABLES>
+                    <STATICVARIABLES>
+                      <SVCURRENTCOMPANY>{$company}</SVCURRENTCOMPANY>
+                    </STATICVARIABLES>
 
-   </REQUESTDESC>
+                  </REQUESTDESC>
 
-   <REQUESTDATA>
+                  <REQUESTDATA>
 
-    <TALLYMESSAGE>
+                    <TALLYMESSAGE>
 
-      <UNIT NAME="$unit" ACTION="Create">
+                      <UNIT NAME="$unit" ACTION="Create">
 
-        <NAME>$unit</NAME>
+                        <NAME>$unit</NAME>
 
-        <ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>
+                        <ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>
 
-      </UNIT>
+                      </UNIT>
 
-    </TALLYMESSAGE>
+                    </TALLYMESSAGE>
 
-   </REQUESTDATA>
+                  </REQUESTDATA>
 
-  </IMPORTDATA>
- </BODY>
+                  </IMPORTDATA>
+                </BODY>
 
-</ENVELOPE>
-XML;
+                </ENVELOPE>
+                XML;
 
         return app(TallyClient::class)
                 ->send($xml, 'UNIT');

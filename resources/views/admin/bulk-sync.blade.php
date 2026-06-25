@@ -752,6 +752,89 @@
         </div>
     </div>
 
+    {{-- ══ DISCOUNT ORDERS SECTION ══════════════════════════════ --}}
+    <div class="px-4 pb-5">
+        <hr style="margin:32px 0;border-color:#e5e7eb">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <div>
+                <h3 style="font-size:22px;font-weight:800;color:#111;margin:0">🏷️ Discount Orders Report</h3>
+                <p style="font-size:13px;color:#9ca3af;margin:4px 0 0">Find all orders with coupon or points discount — preview and download CSV</p>
+            </div>
+        </div>
+        <div class="row g-4 align-items-start">
+            <div class="col-lg-4">
+                <div class="main-card">
+                    <h3 class="main-card-title mb-1">🔍 Filter</h3>
+                    <p class="text-muted mb-4" style="font-size:13px">Select date range for discount report</p>
+                    <div class="mb-3">
+                        <label class="bsp-label">From</label>
+                        <input type="date" class="bsp-input" id="discFromDate" value="{{ now()->startOfMonth()->format('Y-m-d') }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="bsp-label">To</label>
+                        <input type="date" class="bsp-input" id="discToDate" value="{{ now()->format('Y-m-d') }}">
+                    </div>
+                    <div class="mb-4">
+                        <label class="bsp-label">Order Status</label>
+                        <select class="bsp-input" id="discStatus">
+                            <option value="all">All</option>
+                            <option value="processing">Processing Only</option>
+                            <option value="completed">Completed Only</option>
+                            <option value="ready-to-ship">Ready to Ship Only</option>
+                            <option value="shipped">Shipped Only</option>
+                            <option value="delivered">Delivered Only</option>
+                        </select>
+                    </div>
+                    <div class="d-flex flex-column gap-2">
+                        <button class="btn-preview-orders" id="discPreviewBtn" onclick="previewDiscountOrders()">
+                            <i class="fa fa-magnifying-glass me-2"></i>Preview Discount Orders
+                        </button>
+                        <button class="btn-start-sync" id="discDownloadBtn" onclick="downloadDiscountCSV()" disabled
+                            style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);box-shadow:0 8px 20px rgba(29,78,216,.3)">
+                            <i class="fa fa-download me-2"></i>Download CSV
+                        </button>
+                    </div>
+                    <div id="discSummary" class="sum-box" style="display:none">
+                        <div class="sum-row"><span class="k">Total orders scanned</span><span class="v" id="discTotal">—</span></div>
+                        <div class="sum-row"><span class="k">Orders with discount</span><span class="v b" id="discCount">—</span></div>
+                        <div class="sum-row"><span class="k">Total discount amount</span><span class="v" style="color:#dc2626" id="discTotalAmt">—</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-8">
+                <div id="discAlertArea"></div>
+                <div class="main-card" id="discOrdersCard" style="display:none">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <h3 class="main-card-title mb-0">Discount Orders</h3>
+                            <p class="text-muted mb-0" style="font-size:12px">Full list will be in CSV download</p>
+                        </div>
+                        <span class="bs-badge blue" id="discBadge">0</span>
+                    </div>
+                    <div style="border-radius:14px;overflow:hidden;border:1px solid #f3f4f6;max-height:480px;overflow-y:auto">
+                        <table class="bsp-table">
+                            <thead>
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Invoice</th>
+                                    <th>Customer</th>
+                                    <th>Date</th>
+                                    <th>Coupon</th>
+                                    <th style="text-align:right">Discount</th>
+                                    <th style="text-align:right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="discTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="main-card" id="discEmptyCard" style="display:none">
+                    <div class="empty-st"><span class="ei">🎉</span>No discount orders found in this range</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div><!-- /container -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -1024,6 +1107,102 @@ document.addEventListener('DOMContentLoaded',()=>{
     if({{ $stats['pending'] + $stats['processing'] }}>0) startAutoRefresh();
 });
 
+/* ── Discount Orders ─────────────────────────────────────── */
+
+async function previewDiscountOrders(){
+    const btn=document.getElementById('discPreviewBtn');
+    btn.disabled=true;
+    btn.innerHTML='<i class="fa fa-spinner fa-spin me-2"></i>Scanning...';
+    document.getElementById('discDownloadBtn').disabled=true;
+    document.getElementById('discAlertArea').innerHTML='';
+    document.getElementById('discOrdersCard').style.display='none';
+    document.getElementById('discEmptyCard').style.display='none';
+    document.getElementById('discSummary').style.display='none';
+
+    try{
+        const r=await post('/admin/bulk-sync/discount-orders',{
+            from:   document.getElementById('discFromDate').value,
+            to:     document.getElementById('discToDate').value,
+            status: document.getElementById('discStatus').value,
+        });
+        const d=await r.json();
+        if(!d.success){ discAlert('error','⚠️ '+d.message); return; }
+
+        const totalDisc=d.orders.reduce((s,o)=>s+o.total_discount,0);
+        document.getElementById('discTotal').textContent=d.total_scanned;
+        document.getElementById('discCount').textContent=d.discount_count;
+        document.getElementById('discTotalAmt').textContent='₹'+totalDisc.toLocaleString('en-IN',{minimumFractionDigits:2});
+        document.getElementById('discSummary').style.display='block';
+
+        if(!d.orders.length){ document.getElementById('discEmptyCard').style.display='block'; return; }
+
+        document.getElementById('discBadge').textContent=d.orders.length;
+        document.getElementById('discTableBody').innerHTML=d.orders.map(o=>`
+            <tr>
+                <td><strong>#${o.order_number}</strong></td>
+                <td style="font-size:12px;color:#6b7280">${o.invoice_number}</td>
+                <td>
+                    <div style="font-size:13px;font-weight:600">${o.customer_name}</div>
+                    <div style="font-size:11px;color:#9ca3af">${o.phone}</div>
+                </td>
+                <td style="font-size:12px;color:#9ca3af">${o.date}</td>
+                <td>${o.coupon_codes?`<span class="stag proc">${o.coupon_codes}</span>`:''}
+                    ${o.points_discount>0?`<span class="stag ship">Points</span>`:''}</td>
+                <td style="text-align:right;color:#dc2626;font-weight:700">
+                    -₹${o.total_discount.toFixed(2)}
+                    <div style="font-size:10px;color:#9ca3af;font-weight:400">
+                        ${o.coupon_discount>0?'Coupon: ₹'+o.coupon_discount:''}
+                        ${o.points_discount>0?' Pts: ₹'+o.points_discount:''}
+                    </div>
+                </td>
+                <td style="text-align:right;font-weight:700">₹${o.final_total.toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
+            </tr>
+        `).join('');
+        document.getElementById('discOrdersCard').style.display='block';
+        document.getElementById('discDownloadBtn').disabled=false;
+
+    }catch(e){ discAlert('error','⚠️ '+e.message); }
+    finally{
+        btn.disabled=false;
+        btn.innerHTML='<i class="fa fa-magnifying-glass me-2"></i>Preview Discount Orders';
+    }
+}
+
+function downloadDiscountCSV(){
+    const btn=document.getElementById('discDownloadBtn');
+    btn.disabled=true;
+    btn.innerHTML='<i class="fa fa-spinner fa-spin me-2"></i>Generating...';
+
+    const form=document.createElement('form');
+    form.method='POST';
+    form.action='/admin/bulk-sync/discount-orders/download';
+    form.style.display='none';
+
+    const fields={
+        from:   document.getElementById('discFromDate').value,
+        to:     document.getElementById('discToDate').value,
+        status: document.getElementById('discStatus').value,
+        _token: document.querySelector('meta[name="csrf-token"]').content,
+    };
+
+    for(const[k,v] of Object.entries(fields)){
+        const i=document.createElement('input');
+        i.name=k; i.value=v;
+        form.appendChild(i);
+    }
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+
+    discAlert('success','✅ CSV download started! File also saved to storage/app/discount-reports/');
+    setTimeout(()=>{ btn.disabled=false; btn.innerHTML='<i class="fa fa-download me-2"></i>Download CSV'; },2500);
+}
+
+function discAlert(type,html){
+    document.getElementById('discAlertArea').innerHTML=
+        `<div class="bsp-alert ${type}" style="margin-bottom:16px">${html}</div>`;
+}
 </script>
 </body>
 </html>

@@ -11,48 +11,48 @@ class TallyGroupService
         $company = config('tally.company_name');
 
         $xml = <<<XML
-<ENVELOPE>
+                  <ENVELOPE>
 
- <HEADER>
-  <TALLYREQUEST>Import Data</TALLYREQUEST>
- </HEADER>
+                  <HEADER>
+                    <TALLYREQUEST>Import Data</TALLYREQUEST>
+                  </HEADER>
 
- <BODY>
+                  <BODY>
 
-  <IMPORTDATA>
+                    <IMPORTDATA>
 
-   <REQUESTDESC>
+                    <REQUESTDESC>
 
-    <REPORTNAME>All Masters</REPORTNAME>
+                      <REPORTNAME>All Masters</REPORTNAME>
 
-    <STATICVARIABLES>
-      <SVCURRENTCOMPANY>{$company}</SVCURRENTCOMPANY>
-    </STATICVARIABLES>
+                      <STATICVARIABLES>
+                        <SVCURRENTCOMPANY>{$company}</SVCURRENTCOMPANY>
+                      </STATICVARIABLES>
 
-   </REQUESTDESC>
+                    </REQUESTDESC>
 
-   <REQUESTDATA>
+                    <REQUESTDATA>
 
-    <TALLYMESSAGE>
+                      <TALLYMESSAGE>
 
-      <STOCKGROUP NAME="{$group}" ACTION="Create">
+                        <STOCKGROUP NAME="{$group}" ACTION="Create">
 
-        <NAME>{$group}</NAME>
+                          <NAME>{$group}</NAME>
 
-        <PARENT></PARENT>
+                          <PARENT></PARENT>
 
-      </STOCKGROUP>
+                        </STOCKGROUP>
 
-    </TALLYMESSAGE>
+                      </TALLYMESSAGE>
 
-   </REQUESTDATA>
+                    </REQUESTDATA>
 
-  </IMPORTDATA>
+                    </IMPORTDATA>
 
- </BODY>
+                  </BODY>
 
-</ENVELOPE>
-XML;
+                  </ENVELOPE>
+                  XML;
 
       return app(TallyClient::class)
             ->send($xml, 'STOCK GROUP');

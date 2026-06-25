@@ -38,7 +38,6 @@ class TallyVoucherService
             $metaData = [];
 
             foreach ($order['meta_data'] ?? [] as $meta) {
-
                 if (!empty($meta['key'])) {
                     $metaData[$meta['key']] = $meta['value'] ?? null;
                 }
@@ -87,15 +86,9 @@ class TallyVoucherService
             $voucherDate = now()->format('Ymd');
 
             if (!empty($order['date_created'])) {
-
                 try {
-
-                    $voucherDate = Carbon::parse(
-                        $order['date_created']
-                    )->format('Ymd');
-
+                    $voucherDate = Carbon::parse($order['date_created'])->format('Ymd');
                 } catch (\Throwable $e) {
-
                     $voucherDate = now()->format('Ymd');
                 }
             }
@@ -106,16 +99,13 @@ class TallyVoucherService
             |--------------------------------------------------------------------------
             */
 
-            $address1 = trim($billing['address_1'] ?? '');
-            $address2 = trim($billing['address_2'] ?? '');
-
+            $address1    = trim($billing['address_1'] ?? '');
+            $address2    = trim($billing['address_2'] ?? '');
             $fullAddress = trim($address1 . ' ' . $address2);
-
-            $city     = trim($billing['city'] ?? '');
-            $pincode  = trim($billing['postcode'] ?? '');
-            $phone    = trim($billing['phone'] ?? '');
-            $email    = trim($billing['email'] ?? '');
-            $country  = trim($billing['country'] ?? 'India');
+            $city        = trim($billing['city'] ?? '');
+            $pincode     = trim($billing['postcode'] ?? '');
+            $phone       = trim($billing['phone'] ?? '');
+            $email       = trim($billing['email'] ?? '');
 
             /*
             |--------------------------------------------------------------------------
@@ -123,17 +113,9 @@ class TallyVoucherService
             |--------------------------------------------------------------------------
             */
 
-            $customerState = $this->normalizeState(
-                $billing['state'] ?? 'UP'
-            );
-
-            $companyState = $this->normalizeState(
-                config('tally.company_state', 'UP')
-            );
-
-            $isInterState =
-                strtolower($customerState)
-                !== strtolower($companyState);
+            $customerState = $this->normalizeState($billing['state'] ?? 'UP');
+            $companyState  = $this->normalizeState(config('tally.company_state', 'UP'));
+            $isInterState  = strtolower($customerState) !== strtolower($companyState);
 
             Log::info('TALLY GST TYPE', [
                 'customer_state' => $customerState,
@@ -158,30 +140,9 @@ class TallyVoucherService
             |--------------------------------------------------------------------------
             */
 
-            $shippingTotal = (float) (
-                $order['shipping_total'] ?? 0
-            );
-
-            $couponDiscount = (float) (
-                $order['discount_total'] ?? 0
-            );
-
-            $pointsRedeemed = (float) (
-                $metaData['points_redeemed'] ?? 0
-            );
-
-            $pointsDiscount = $pointsRedeemed / 100;
-
-            $discountTotal = $couponDiscount + $pointsDiscount;
-
-
-            $platformFee = (float) (
-                $order['platform_fee'] ?? 0
-            );
-
-            $finalTotal = (float) (
-                $order['total'] ?? 0
-            );
+            $shippingTotal = (float) ($order['shipping_total'] ?? 0);
+            $platformFee   = (float) ($order['platform_fee']   ?? 0);
+            $finalTotal    = (float) ($order['total']          ?? 0);
 
             /*
             |--------------------------------------------------------------------------
@@ -201,106 +162,54 @@ class TallyVoucherService
 
             /*
             |--------------------------------------------------------------------------
-            | ITEMS
+            | ITEMS LOOP — Inventory entries + GST summary
             |--------------------------------------------------------------------------
             */
 
-            $inventoryEntries = '';
-            $ledgerEntries    = '';
-            $gstSummary       = [];
+            $inventoryEntries  = '';
+            $ledgerEntries     = '';
+            $gstSummary        = [];
+            $totalItemsTaxable = 0;
+            $totalGstAmount    = 0;
 
             foreach ($order['line_items'] ?? [] as $item) {
 
-                $itemName = trim(
-                    $item['name'] ?? 'Product'
-                );
+                $itemName = trim($item['name'] ?? 'Product');
 
-                $qty = (float) (
-                    $item['quantity']
-                    ?? $item['qty']
-                    ?? 1
-                );
+                $qty = (float) ($item['quantity'] ?? $item['qty'] ?? 1);
+                if ($qty <= 0) $qty = 1;
 
-                if ($qty <= 0) {
-                    $qty = 1;
-                }
+                $unit = config('tally.default_unit', 'PCS');
 
-                $unit = config(
-                    'tally.default_unit',
-                    'PCS'
-                );
+                $taxableAmount = (float) ($item['subtotal'] ?? $item['total'] ?? 0);
+                $taxAmount     = (float) ($item['subtotal_tax'] ?? $item['total_tax'] ?? 0);
 
-                $taxableAmount = (float) (
-                    $item['subtotal']
-                    ?? $item['total']
-                    ?? 0
-                );
-
-                $taxAmount = (float) (
-                    $item['subtotal_tax']
-                    ?? $item['total_tax']
-                    ?? 0
-                );
+                $totalItemsTaxable += $taxableAmount;
+                $totalGstAmount    += $taxAmount;
 
                 /*
                 |--------------------------------------------------------------------------
-                | GST RATE
+                | GST RATE — normalize to slab
                 |--------------------------------------------------------------------------
                 */
 
                 $gstRate = 0;
 
                 if ($taxableAmount > 0 && $taxAmount > 0) {
+                    $rawRate = ($taxAmount / $taxableAmount) * 100;
 
-                    $rawRate =
-                        ($taxAmount / $taxableAmount) * 100;
-
-                    if ($rawRate <= 1) {
-                        $gstRate = 0;
-                    } elseif ($rawRate <= 5.5) {
-                        $gstRate = 5;
-                    } elseif ($rawRate <= 12.5) {
-                        $gstRate = 12;
-                    } elseif ($rawRate <= 18.5) {
-                        $gstRate = 18;
-                    } elseif ($rawRate <= 28.5) {
-                        $gstRate = 28;
-                    } else {
-                        $gstRate = round($rawRate, 2);
-                    }
+                    if ($rawRate <= 1)         $gstRate = 0;
+                    elseif ($rawRate <= 5.5)   $gstRate = 5;
+                    elseif ($rawRate <= 12.5)  $gstRate = 12;
+                    elseif ($rawRate <= 18.5)  $gstRate = 18;
+                    elseif ($rawRate <= 28.5)  $gstRate = 28;
+                    else                       $gstRate = round($rawRate, 2);
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | SALES LEDGER
-                |--------------------------------------------------------------------------
-                */
+                $salesLedger = $this->getSalesLedger($gstRate);
 
-                $salesLedger = $this->getSalesLedger(
-                    $gstRate
-                );
-
-                /*
-                |--------------------------------------------------------------------------
-                | AUTO CREATE LEDGER
-                |--------------------------------------------------------------------------
-                */
-
-                $this->createSimpleLedger(
-                    $salesLedger,
-                    'Sales Accounts'
-                );
-
-                /*
-                |--------------------------------------------------------------------------
-                | AUTO CREATE STOCK ITEM
-                |--------------------------------------------------------------------------
-                */
-
-                $this->createStockItem(
-                    $itemName,
-                    $unit
-                );
+                $this->createSimpleLedger($salesLedger, 'Sales Accounts');
+                $this->createStockItem($itemName, $unit);
 
                 /*
                 |--------------------------------------------------------------------------
@@ -312,62 +221,36 @@ class TallyVoucherService
 
                     if ($isInterState) {
 
-                        $gstKey =
-                            'igst_' . (int) $gstRate;
-
-                        $gstSummary[$gstKey] =
-                            ($gstSummary[$gstKey] ?? 0)
-                            + $taxAmount;
+                        $gstKey = 'igst_' . (int) $gstRate;
+                        $gstSummary[$gstKey] = ($gstSummary[$gstKey] ?? 0) + $taxAmount;
 
                     } else {
 
-                        $halfRate = $gstRate / 2;
+                        $halfRate    = $gstRate / 2;
+                        $halfRateStr = str_replace('.', '', rtrim(number_format($halfRate, 1, '.', ''), '0'));
 
-                        $halfRateStr = str_replace(
-                            '.',
-                            '',
-                            rtrim(
-                                number_format(
-                                    $halfRate,
-                                    1,
-                                    '.',
-                                    ''
-                                ),
-                                '0'
-                            )
-                        );
+                        $cgstKey = 'cgst_' . $halfRateStr;
+                        $sgstKey = 'sgst_' . $halfRateStr;
 
-                        $cgstKey =
-                            'cgst_' . $halfRateStr;
-
-                        $sgstKey =
-                            'sgst_' . $halfRateStr;
-
-                        $gstSummary[$cgstKey] =
-                            ($gstSummary[$cgstKey] ?? 0)
-                            + ($taxAmount / 2);
-
-                        $gstSummary[$sgstKey] =
-                            ($gstSummary[$sgstKey] ?? 0)
-                            + ($taxAmount / 2);
+                        $gstSummary[$cgstKey] = ($gstSummary[$cgstKey] ?? 0) + ($taxAmount / 2);
+                        $gstSummary[$sgstKey] = ($gstSummary[$sgstKey] ?? 0) + ($taxAmount / 2);
                     }
                 }
 
-                /*
-                |--------------------------------------------------------------------------
-                | RATE
-                |--------------------------------------------------------------------------
-                */
-
-                $rate = round(
-                    $taxableAmount / $qty,
-                    2
-                );
+                $rate = round($taxableAmount / $qty, 2);
 
                 /*
                 |--------------------------------------------------------------------------
-                | INVENTORY ENTRY
+                | INVENTORY ENTRY XML
                 |--------------------------------------------------------------------------
+                |
+                | TALLY SALES VOUCHER SIGN RULE:
+                |
+                | "To" entries (Credit) → ISDEEMEDPOSITIVE=Yes, AMOUNT=negative
+                | "By" entries (Debit)  → ISDEEMEDPOSITIVE=No,  AMOUNT=positive
+                |
+                | Stock items are CREDIT side in sales → Yes, negative
+                |
                 */
 
                 $inventoryEntries .= "
@@ -401,48 +284,98 @@ class TallyVoucherService
 
             /*
             |--------------------------------------------------------------------------
-            | CUSTOMER LEDGER ENTRY
+            | BALANCE DIFFERENCE CALCULATION
             |--------------------------------------------------------------------------
+            |
+            | Credit side total = items + GST + shipping + platform
+            | finalTotal = WooCommerce paid amount (already discount cut ke baad)
+            |
+            | balanceDiff = creditTotal - finalTotal
+            |
+            | Agar balanceDiff > 0 → discount tha → DISCOUNT ALLOWED credit mein jayega
+            | Agar balanceDiff < 0 → extra charge → ROUND OFF credit mein jayega
+            | Agar balanceDiff = 0 → perfect balance, koi adjustment nahi
+            |
+            | Example:
+            |   Items=847, GST=99.54, Platform=5 → creditTotal=951.54
+            |   finalTotal (paid) = 934.61
+            |   balanceDiff = 951.54 - 934.61 = 16.93 → DISCOUNT ALLOWED = 16.93 credit
+            |
+            */
+
+            $creditTotal = round(
+                $totalItemsTaxable + $totalGstAmount + $shippingTotal + $platformFee,
+                2
+            );
+
+            $balanceDiff = round(
+                                    bcsub(
+                                        number_format($creditTotal,2,'.',''),
+                                        number_format($finalTotal,2,'.',''),
+                                        2
+                                    ),
+                                    2
+                                );
+
+            Log::info('TALLY BALANCE CALCULATION', [
+                'items_taxable' => $totalItemsTaxable,
+                'gst_total'     => $totalGstAmount,
+                'shipping'      => $shippingTotal,
+                'platform_fee'  => $platformFee,
+                'credit_total'  => $creditTotal,
+                'final_total'   => $finalTotal,
+                'balance_diff'  => $balanceDiff,
+                'adjustment'    => $balanceDiff > 0.01
+                    ? 'DISCOUNT ALLOWED credit: ' . $balanceDiff
+                    : ($balanceDiff < -0.01 ? 'ROUND OFF credit: ' . abs($balanceDiff) : 'NO ADJUSTMENT'),
+            ]);
+
+            /*
+            |--------------------------------------------------------------------------
+            | LEDGER ENTRIES
+            |--------------------------------------------------------------------------
+            |
+            | TALLY SALES VOUCHER SIGN RULE:
+            |
+            | "By" Customer  (Debit)  → ISDEEMEDPOSITIVE=No,  AMOUNT=+positive
+            | "To" Sales A/C (Credit) → ISDEEMEDPOSITIVE=Yes, AMOUNT=-negative
+            | "To" GST       (Credit) → ISDEEMEDPOSITIVE=Yes, AMOUNT=-negative
+            | "To" Shipping  (Credit) → ISDEEMEDPOSITIVE=Yes, AMOUNT=-negative
+            | "To" Platform  (Credit) → ISDEEMEDPOSITIVE=Yes, AMOUNT=-negative
+            | "To" Discount  (Credit) → ISDEEMEDPOSITIVE=Yes, AMOUNT=-negative ← CREDIT SIDE
+            |
+            */
+
+            /*
+            | 1. CUSTOMER — Debit (By)
             */
 
             $ledgerEntries .= "
 
-                                <LEDGERENTRIES.LIST>
+            <LEDGERENTRIES.LIST>
 
-                                    <LEDGERNAME>{$this->xml($customerName)}</LEDGERNAME>
+            <LEDGERNAME>{$this->xml($customerName)}</LEDGERNAME>
 
-                                    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
 
-                                    <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
+            <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
 
-                                    <AMOUNT>" . round($finalTotal, 2) . "</AMOUNT>
+            <AMOUNT>" . round($finalTotal,2) . "</AMOUNT>
 
-                                </LEDGERENTRIES.LIST>";
+            </LEDGERENTRIES.LIST>";
 
             /*
-            |--------------------------------------------------------------------------
-            | GST ENTRIES
-            |--------------------------------------------------------------------------
+            | 2. GST — Credit (To)
             */
 
             foreach ($gstSummary as $key => $amount) {
 
-                if ($amount <= 0) {
-                    continue;
-                }
+                if ($amount <= 0) continue;
 
-                $ledgerName = config(
-                    'tally.ledger_' . $key
-                );
+                $ledgerName = config('tally.ledger_' . $key);
+                if (!$ledgerName) continue;
 
-                if (!$ledgerName) {
-                    continue;
-                }
-
-                $this->createSimpleLedger(
-                    $ledgerName,
-                    'Duties & Taxes'
-                );
+                $this->createSimpleLedger($ledgerName, 'Duties & Taxes');
 
                 $ledgerEntries .= "
 
@@ -458,22 +391,13 @@ class TallyVoucherService
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | SHIPPING
-            |--------------------------------------------------------------------------
+            | 3. SHIPPING — Credit (To)
             */
 
             if ($shippingTotal > 0) {
 
-                $shippingLedger = config(
-                    'tally.shipping_ledger',
-                    'Shipping Charges'
-                );
-
-                $this->createSimpleLedger(
-                    $shippingLedger,
-                    'Indirect Incomes'
-                );
+                $shippingLedger = config('tally.shipping_ledger', 'SHIPPING CHARGES COLLECTED');
+                $this->createSimpleLedger($shippingLedger, 'Indirect Incomes');
 
                 $ledgerEntries .= "
 
@@ -489,22 +413,13 @@ class TallyVoucherService
             }
 
             /*
-            |--------------------------------------------------------------------------
-            | PLATFORM FEE
-            |--------------------------------------------------------------------------
+            | 4. PLATFORM FEE — Credit (To)
             */
 
             if ($platformFee > 0) {
 
-                $platformLedger = config(
-                    'tally.platform_ledger',
-                    'Platform Charges'
-                );
-
-                $this->createSimpleLedger(
-                    $platformLedger,
-                    'Indirect Incomes'
-                );
+                $platformLedger = config('tally.platform_ledger', 'PLATFORM CHARGES COLLECTED');
+                $this->createSimpleLedger($platformLedger, 'Indirect Incomes');
 
                 $ledgerEntries .= "
 
@@ -521,24 +436,23 @@ class TallyVoucherService
 
             /*
             |--------------------------------------------------------------------------
-            | DISCOUNT
+            | 5. DISCOUNT / ROUND-OFF AUTO BALANCE ENTRY
             |--------------------------------------------------------------------------
-            | Discount = expense for company → Debit side in Sales voucher
-            | ISDEEMEDPOSITIVE = No → Debit
-            | AMOUNT = positive (no minus sign)
+            |
+            | balanceDiff > 0.01 → Discount tha → DISCOUNT ALLOWED Credit (To)
+            |   ISDEEMEDPOSITIVE=Yes, Amount=-balanceDiff
+            |   Ye credit side ko balance karta hai
+            |
+            | balanceDiff < -0.01 → Extra rounding charge → ROUND OFF Credit (To)
+            |   ISDEEMEDPOSITIVE=Yes, Amount=+|balanceDiff| (ye debit reduce karega)
+            |
             */
 
-            if ($discountTotal > 0) {
+            if ($balanceDiff > 0.01) {
 
-                $discountLedger = config(
-                    'tally.discount_ledger',
-                    'DISCOUNT ALLOWED'
-                );
+                $discountLedger = config('tally.discount_ledger', 'DISCOUNT ALLOWED');
 
-                $this->createSimpleLedger(
-                    $discountLedger,
-                    'Indirect Expenses'
-                );
+                $this->createSimpleLedger($discountLedger, 'Indirect Expenses');
 
                 $ledgerEntries .= "
 
@@ -546,11 +460,33 @@ class TallyVoucherService
 
                     <LEDGERNAME>{$this->xml($discountLedger)}</LEDGERNAME>
 
-                    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+                    <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
 
-                    <AMOUNT>" . round($discountTotal, 2) . "</AMOUNT>
+                    <AMOUNT>" . round($balanceDiff, 2) . "</AMOUNT>
 
                 </LEDGERENTRIES.LIST>";
+            } elseif ($balanceDiff < -0.01) {
+
+                $roundOffLedger = config('tally.roundoff_ledger', 'ROUND OFF');
+                $this->createSimpleLedger($roundOffLedger, 'Indirect Expenses');
+
+                $ledgerEntries .= "
+
+                                <LEDGERENTRIES.LIST>
+
+                                    <LEDGERNAME>{$this->xml($roundOffLedger)}</LEDGERNAME>
+
+                                    <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+
+                                    <AMOUNT>" . abs(round($balanceDiff, 2)) . "</AMOUNT>
+
+                                </LEDGERENTRIES.LIST>";
+
+                Log::info('ROUND OFF ENTRY ADDED', [
+                    'ledger' => $roundOffLedger,
+                    'amount' => abs($balanceDiff),
+                    'side'   => 'Debit (By)',
+                ]);
             }
 
             /*
@@ -595,9 +531,7 @@ class TallyVoucherService
 
                     <STATICVARIABLES>
 
-                    <SVCURRENTCOMPANY>" . $this->xml(
-                                    config('tally.company_name')
-                                ) . "</SVCURRENTCOMPANY>
+                    <SVCURRENTCOMPANY>" . $this->xml(config('tally.company_name')) . "</SVCURRENTCOMPANY>
 
                     </STATICVARIABLES>
 
@@ -667,102 +601,74 @@ class TallyVoucherService
 
                     </ENVELOPE>";
 
-                                Log::info('FINAL TALLY XML', [
-                                    'xml' => $xml
-                                ]);
+            Log::info('FINAL TALLY XML', ['xml' => $xml]);
 
-                                /*
-                                |--------------------------------------------------------------------------
-                                | SEND XML
-                                |--------------------------------------------------------------------------
-                                */
+            /*
+            |--------------------------------------------------------------------------
+            | SEND XML
+            |--------------------------------------------------------------------------
+            */
 
-                                $response = $this->client->send(
-                                    $xml,
-                                    'VOUCHER'
-                                );
+            $response = $this->client->send($xml, 'VOUCHER');
 
-                                Log::info('TALLY RESPONSE', [
-                                    'response' => $response
-                                ]);
+            Log::info('TALLY RESPONSE', ['response' => $response]);
 
-                                if (empty($response)) {
+            if (empty($response)) {
+                Log::error('TALLY EMPTY RESPONSE');
+                return false;
+            }
 
-                                    Log::error('TALLY EMPTY RESPONSE');
+            $success =
+                str_contains($response, '<CREATED>1</CREATED>') ||
+                str_contains($response, '<ALTERED>1</ALTERED>') ||
+                str_contains($response, '<COMBINED>1</COMBINED>');
 
-                                    return false;
-                                }
+            if (!$success) {
 
-                                $success =
-                                    str_contains(
-                                        $response,
-                                        '<CREATED>1</CREATED>'
-                                    ) ||
-                                    str_contains(
-                                        $response,
-                                        '<ALTERED>1</ALTERED>'
-                                    ) ||
-                                    str_contains(
-                                        $response,
-                                        '<COMBINED>1</COMBINED>'
-                                    );
+                preg_match('/<LINEERROR>(.*?)<\/LINEERROR>/s', $response, $m);
 
-                                if (!$success) {
+                Log::error('TALLY VOUCHER FAILED', [
+                    'error'         => html_entity_decode($m[1] ?? 'Unknown'),
+                    'full_response' => $response,
+                    'balance_check' => [
+                        'credit_total' => $creditTotal,
+                        'final_total'  => $finalTotal,
+                        'balance_diff' => $balanceDiff,
+                    ],
+                ]);
+            }
 
-                                    preg_match(
-                                        '/<LINEERROR>(.*?)<\/LINEERROR>/s',
-                                        $response,
-                                        $m
-                                    );
+            return $success;
 
-                                    Log::error(
-                                        'TALLY VOUCHER FAILED',
-                                        [
-                                            'error' => html_entity_decode(
-                                                $m[1] ?? 'Unknown'
-                                            ),
-                                        ]
-                                    );
-                                }
+        } catch (\Throwable $e) {
 
-                                return $success;
+            Log::error('TALLY VOUCHER EXCEPTION', [
+                'message' => $e->getMessage(),
+                'line'    => $e->getLine(),
+                'file'    => $e->getFile(),
+            ]);
 
-                            } catch (\Throwable $e) {
+            return false;
+        }
+    }
 
-                                Log::error(
-                                    'TALLY VOUCHER EXCEPTION',
-                                    [
-                                        'message' => $e->getMessage(),
-                                        'line'    => $e->getLine(),
-                                        'file'    => $e->getFile(),
-                                    ]
-                                );
+    /*
+    |--------------------------------------------------------------------------
+    | PARTY LEDGER
+    |--------------------------------------------------------------------------
+    */
 
-                                return false;
-                            }
-                        }
+    private function createPartyLedger(
+        string $customerName,
+        string $state,
+        string $address,
+        string $city,
+        string $pincode,
+        string $phone,
+        string $email
+    ): void {
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | PARTY LEDGER
-                        |--------------------------------------------------------------------------
-                        */
-
-                        private function createPartyLedger(
-                            string $customerName,
-                            string $state,
-                            string $address,
-                            string $city,
-                            string $pincode,
-                            string $phone,
-                            string $email
-                        ): void {
-
-                            $fullAddress = trim(
-                                $address . ', ' . $city . ' - ' . $pincode
-                            );
-
-                            $xml = "
+        $xml = "
 
                     <ENVELOPE>
 
@@ -782,9 +688,7 @@ class TallyVoucherService
 
                     <STATICVARIABLES>
 
-                    <SVCURRENTCOMPANY>" . $this->xml(
-                                config('tally.company_name')
-                            ) . "</SVCURRENTCOMPANY>
+                    <SVCURRENTCOMPANY>" . $this->xml(config('tally.company_name')) . "</SVCURRENTCOMPANY>
 
                     </STATICVARIABLES>
 
@@ -830,14 +734,11 @@ class TallyVoucherService
 
                     </ENVELOPE>";
 
-        $response = $this->client->send(
-            $xml,
-            'LEDGER'
-        );
+        $response = $this->client->send($xml, 'LEDGER');
 
         Log::info('PARTY LEDGER RESPONSE', [
             'customer' => $customerName,
-            'response' => $response
+            'response' => $response,
         ]);
     }
 
@@ -847,15 +748,9 @@ class TallyVoucherService
     |--------------------------------------------------------------------------
     */
 
-    private function createStockItem(
-        string $itemName,
-        string $unit
-    ): void {
-
-        $group = config(
-            'tally.default_stock_group',
-            'Primary'
-        );
+    private function createStockItem(string $itemName, string $unit): void
+    {
+        $group = config('tally.default_stock_group', 'Primary');
 
         $xml = "
 
@@ -877,9 +772,7 @@ class TallyVoucherService
 
                 <STATICVARIABLES>
 
-                <SVCURRENTCOMPANY>" . $this->xml(
-                            config('tally.company_name')
-                        ) . "</SVCURRENTCOMPANY>
+                <SVCURRENTCOMPANY>" . $this->xml(config('tally.company_name')) . "</SVCURRENTCOMPANY>
 
                 </STATICVARIABLES>
 
@@ -909,14 +802,11 @@ class TallyVoucherService
 
                 </ENVELOPE>";
 
-        $response = $this->client->send(
-            $xml,
-            'STOCK'
-        );
+        $response = $this->client->send($xml, 'STOCK');
 
         Log::info('STOCK ITEM RESPONSE', [
-            'item' => $itemName,
-            'response' => $response
+            'item'     => $itemName,
+            'response' => $response,
         ]);
     }
 
@@ -926,11 +816,8 @@ class TallyVoucherService
     |--------------------------------------------------------------------------
     */
 
-    private function createSimpleLedger(
-        string $ledgerName,
-        string $parent
-    ): void {
-
+    private function createSimpleLedger(string $ledgerName, string $parent): void
+    {
         $xml = "
 
                 <ENVELOPE>
@@ -951,9 +838,7 @@ class TallyVoucherService
 
                 <STATICVARIABLES>
 
-                <SVCURRENTCOMPANY>" . $this->xml(
-                            config('tally.company_name')
-                        ) . "</SVCURRENTCOMPANY>
+                <SVCURRENTCOMPANY>" . $this->xml(config('tally.company_name')) . "</SVCURRENTCOMPANY>
 
                 </STATICVARIABLES>
 
@@ -963,7 +848,7 @@ class TallyVoucherService
 
                 <TALLYMESSAGE xmlns:UDF='TallyUDF'>
 
-                <LEDGER NAME='" . $this->xml($ledgerName) . "' ACTION='Create Alter'>
+                <LEDGER NAME='" . $this->xml($ledgerName) . "' ACTION='Create'>
 
                     <NAME>" . $this->xml($ledgerName) . "</NAME>
 
@@ -981,48 +866,23 @@ class TallyVoucherService
 
                 </ENVELOPE>";
 
-        $this->client->send(
-            $xml,
-            'LEDGER'
-        );
+        $this->client->send($xml, 'LEDGER');
     }
 
     /*
     |--------------------------------------------------------------------------
-    | SALES LEDGER
+    | SALES LEDGER BY GST RATE
     |--------------------------------------------------------------------------
     */
 
-    private function getSalesLedger(
-        float $gstRate
-    ): string {
-
+    private function getSalesLedger(float $gstRate): string
+    {
         return match ((int) $gstRate) {
-
-            5 => config(
-                'tally.ledger_taxable_5',
-                'Sales @ 5%'
-            ),
-
-            12 => config(
-                'tally.ledger_taxable_12',
-                'Sales @ 12%'
-            ),
-
-            18 => config(
-                'tally.ledger_taxable_18',
-                'Sales @ 18%'
-            ),
-
-            28 => config(
-                'tally.ledger_taxable_28',
-                'Sales @ 28%'
-            ),
-
-            default => config(
-                'tally.ledger_nil_rated',
-                'Nil Rated Sales'
-            ),
+            5       => config('tally.ledger_taxable_5',  'TAXABLE SALE 5%'),
+            12      => config('tally.ledger_taxable_12', 'TAXABLE SALE 12%'),
+            18      => config('tally.ledger_taxable_18', 'TAXABLE SALE 18%'),
+            28      => config('tally.ledger_taxable_28', 'TAXABLE SALE 28%'),
+            default => config('tally.ledger_nil_rated',  'NIL RATED SALES A/C'),
         };
     }
 
@@ -1047,12 +907,9 @@ class TallyVoucherService
     |--------------------------------------------------------------------------
     */
 
-    private function normalizeState(
-        string $state
-    ): string {
-
+    private function normalizeState(string $state): string
+    {
         $map = [
-
             'DL' => 'Delhi',
             'UP' => 'Uttar Pradesh',
             'HR' => 'Haryana',
@@ -1065,10 +922,31 @@ class TallyVoucherService
             'WB' => 'West Bengal',
             'BR' => 'Bihar',
             'MP' => 'Madhya Pradesh',
+            'UK' => 'Uttarakhand',
+            'HP' => 'Himachal Pradesh',
+            'JK' => 'Jammu & Kashmir',
+            'GA' => 'Goa',
+            'CG' => 'Chhattisgarh',
+            'JH' => 'Jharkhand',
+            'OD' => 'Odisha',
+            'KL' => 'Kerala',
+            'AP' => 'Andhra Pradesh',
+            'TS' => 'Telangana',
+            'AS' => 'Assam',
+            'MN' => 'Manipur',
+            'ML' => 'Meghalaya',
+            'MZ' => 'Mizoram',
+            'NL' => 'Nagaland',
+            'SK' => 'Sikkim',
+            'TR' => 'Tripura',
+            'AR' => 'Arunachal Pradesh',
+            'CH' => 'Chandigarh',
+            'PY' => 'Puducherry',
+            'AN' => 'Andaman and Nicobar Islands',
         ];
 
         $state = strtoupper(trim($state));
-
         return $map[$state] ?? $state;
     }
 }
+

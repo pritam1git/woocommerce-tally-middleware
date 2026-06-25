@@ -30,6 +30,10 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 
     Route::post('/bulk-sync/retry-failed', [BulkSyncController::class, 'retryFailed'])->name('admin.bulk-sync.retry-failed');
 
+    Route::post('/bulk-sync/discount-orders', [BulkSyncController::class, 'discountOrders'])->name('admin.bulk-sync.discount-orders');
+
+    Route::post('/bulk-sync/discount-orders/download', [BulkSyncController::class, 'downloadDiscountOrders'])->name('admin.bulk-sync.discount-download');
+
 });
 
 Auth::routes();

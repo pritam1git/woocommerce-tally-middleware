@@ -10,44 +10,44 @@ class TallyLedgerService
         $ledgerName = htmlspecialchars($ledgerName);
 
         $xml = <<<XML
-<ENVELOPE>
- <HEADER>
-  <TALLYREQUEST>Import Data</TALLYREQUEST>
- </HEADER>
+                <ENVELOPE>
+                <HEADER>
+                  <TALLYREQUEST>Import Data</TALLYREQUEST>
+                </HEADER>
 
- <BODY>
-  <IMPORTDATA>
+                <BODY>
+                  <IMPORTDATA>
 
-   <REQUESTDESC>
-    <REPORTNAME>All Masters</REPORTNAME>
+                  <REQUESTDESC>
+                    <REPORTNAME>All Masters</REPORTNAME>
 
-    <STATICVARIABLES>
-      <SVCURRENTCOMPANY>{$company}</SVCURRENTCOMPANY>
-    </STATICVARIABLES>
+                    <STATICVARIABLES>
+                      <SVCURRENTCOMPANY>{$company}</SVCURRENTCOMPANY>
+                    </STATICVARIABLES>
 
-   </REQUESTDESC>
+                  </REQUESTDESC>
 
-   <REQUESTDATA>
+                  <REQUESTDATA>
 
-    <TALLYMESSAGE>
+                    <TALLYMESSAGE>
 
-      <LEDGER NAME="$ledgerName" ACTION="Create">
+                      <LEDGER NAME="$ledgerName" ACTION="Create">
 
-        <NAME>$ledgerName</NAME>
+                        <NAME>$ledgerName</NAME>
 
-        <PARENT>Sundry Debtors</PARENT>
+                        <PARENT>Sundry Debtors</PARENT>
 
-      </LEDGER>
+                      </LEDGER>
 
-    </TALLYMESSAGE>
+                    </TALLYMESSAGE>
 
-   </REQUESTDATA>
+                  </REQUESTDATA>
 
-  </IMPORTDATA>
- </BODY>
+                  </IMPORTDATA>
+                </BODY>
 
-</ENVELOPE>
-XML;
+                </ENVELOPE>
+                XML;
 
         return app(TallyClient::class)
             ->send($xml, 'LEDGER');

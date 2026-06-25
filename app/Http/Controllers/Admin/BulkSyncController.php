@@ -455,4 +455,322 @@ class BulkSyncController extends Controller
             'count'   => $count,
         ]);
     }
+
+        /*
+    |--------------------------------------------------------------------------
+    | DISCOUNT ORDERS LIST — Preview
+    |--------------------------------------------------------------------------
+    | WooCommerce se discount wale orders fetch karo
+    | Frontend pe list dikhao
+    */
+
+    public function discountOrders(Request $request)
+    {
+        $request->validate([
+            'from'   => 'required|date',
+            'to'     => 'required|date|after_or_equal:from',
+            'status' => 'nullable|string',
+        ]);
+ 
+        $from     = \Carbon\Carbon::parse($request->from)->startOfDay();
+        $to       = \Carbon\Carbon::parse($request->to)->endOfDay();
+        $status   = $request->status ?? 'all';
+ 
+        $statuses = match($status) {
+            'processing'    => ['processing'],
+            'completed'     => ['completed'],
+            'ready-to-ship' => ['ready-to-ship'],
+            'shipped'     => ['shipped'],
+            'delivered'     => ['delivered'],
+            default         => ['processing', 'completed', 'ready-to-ship', 'shipped', 'delivered'],
+        };
+ 
+        $wcUrl = config('services.woocommerce.url');
+        $ckKey = config('services.woocommerce.consumer_key');
+        $csKey = config('services.woocommerce.consumer_secret');
+ 
+        if (empty($wcUrl) || empty($ckKey) || empty($csKey)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'WooCommerce credentials not configured in .env',
+            ], 500);
+        }
+ 
+        $discountOrders = [];
+        $totalOrders    = 0;
+ 
+        try {
+ 
+            foreach ($statuses as $s) {
+ 
+                $page = 1;
+ 
+                do {
+ 
+                    $response = \Illuminate\Support\Facades\Http::withBasicAuth($ckKey, $csKey)
+                        ->timeout(120)
+                        ->get("{$wcUrl}/wp-json/wc/v3/orders", [
+                            'status'   => $s,
+                            'after'    => $from->toIso8601String(),
+                            'before'   => $to->toIso8601String(),
+                            'per_page' => 50,
+                            'page'     => $page,
+                            'orderby'  => 'date',
+                            'order'    => 'asc',
+                        ]);
+ 
+                    if (!$response->successful()) break;
+ 
+                    $orders = $response->json();
+                    if (empty($orders)) break;
+ 
+                    foreach ($orders as $order) {
+ 
+                        $totalOrders++;
+ 
+                        $discountTotal = (float) ($order['discount_total'] ?? 0);
+ 
+                        // Points redemption bhi check karo meta_data mein
+                        $pointsDiscount = 0;
+                        foreach ($order['meta_data'] ?? [] as $meta) {
+                            if ($meta['key'] === 'points_redeemed') {
+                                $pointsDiscount = (float) ($meta['value'] ?? 0) / 100;
+                            }
+                        }
+ 
+                        $totalDiscount = $discountTotal + $pointsDiscount;
+ 
+                        // Sirf discount wale orders
+                        if ($totalDiscount <= 0) continue;
+ 
+                        // Coupon codes
+                        $coupons = collect($order['coupon_lines'] ?? [])
+                            ->pluck('code')
+                            ->filter()
+                            ->implode(', ');
+ 
+                        // Customer name
+                        $customerName = trim(
+                            ($order['billing']['first_name'] ?? '') . ' ' .
+                            ($order['billing']['last_name'] ?? '')
+                        ) ?: 'Walk-in Customer';
+ 
+                        // Invoice number
+                        $invoiceNumber = '';
+                        foreach ($order['meta_data'] ?? [] as $meta) {
+                            if ($meta['key'] === '_wcpdf_invoice_number') {
+                                $invoiceNumber = $meta['value'] ?? '';
+                                break;
+                            }
+                        }
+ 
+                        $discountOrders[] = [
+                            'order_number'    => $order['number'] ?? $order['id'],
+                            'invoice_number'  => $invoiceNumber ?: ('INV-' . ($order['number'] ?? '')),
+                            'date'            => \Carbon\Carbon::parse($order['date_created'])->format('d M Y'),
+                            'date_raw'        => $order['date_created'],
+                            'customer_name'   => $customerName,
+                            'phone'           => $order['billing']['phone'] ?? '',
+                            'email'           => $order['billing']['email'] ?? '',
+                            'status'          => $order['status'] ?? '',
+                            'subtotal'        => (float) ($order['total'] ?? 0) + $totalDiscount,
+                            'coupon_discount' => round($discountTotal, 2),
+                            'points_discount' => round($pointsDiscount, 2),
+                            'total_discount'  => round($totalDiscount, 2),
+                            'final_total'     => (float) ($order['total'] ?? 0),
+                            'coupon_codes'    => $coupons,
+                            'payment_method'  => $order['payment_method_title'] ?? '',
+                        ];
+                    }
+ 
+                    $page++;
+                    if (count($orders) < 100) break;
+ 
+                } while (true);
+            }
+ 
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage(),
+            ], 500);
+        }
+ 
+        return response()->json([
+            'success'         => true,
+            'total_scanned'   => $totalOrders,
+            'discount_count'  => count($discountOrders),
+            'orders'          => $discountOrders,
+        ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DISCOUNT ORDERS CSV DOWNLOAD
+    |--------------------------------------------------------------------------
+    | CSV generate karo aur storage mein save bhi karo
+    */
+
+    public function downloadDiscountOrders(Request $request)
+    {
+        $request->validate([
+            'from'   => 'required|date',
+            'to'     => 'required|date|after_or_equal:from',
+            'status' => 'nullable|string',
+        ]);
+ 
+        $from     = \Carbon\Carbon::parse($request->from)->startOfDay();
+        $to       = \Carbon\Carbon::parse($request->to)->endOfDay();
+        $status   = $request->status ?? 'all';
+ 
+        $statuses = match($status) {
+            'processing'    => ['processing'],
+            'completed'     => ['completed'],
+            'ready-to-ship' => ['ready-to-ship'],
+            'shipped'     => ['shipped'],
+            'delivered'     => ['delivered'],
+            default         => ['processing', 'completed', 'ready-to-ship', 'shipped', 'delivered'],
+        };
+ 
+        $wcUrl = config('services.woocommerce.url');
+        $ckKey = config('services.woocommerce.consumer_key');
+        $csKey = config('services.woocommerce.consumer_secret');
+ 
+        if (empty($wcUrl) || empty($ckKey) || empty($csKey)) {
+            return response()->json(['success' => false, 'message' => 'WooCommerce credentials missing'], 500);
+        }
+ 
+        $discountOrders = [];
+ 
+        try {
+ 
+            foreach ($statuses as $s) {
+ 
+                $page = 1;
+ 
+                do {
+ 
+                    $response = \Illuminate\Support\Facades\Http::withBasicAuth($ckKey, $csKey)
+                        ->timeout(120)
+                        ->get("{$wcUrl}/wp-json/wc/v3/orders", [
+                            'status'   => $s,
+                            'after'    => $from->toIso8601String(),
+                            'before'   => $to->toIso8601String(),
+                            'per_page' => 50,
+                            'page'     => $page,
+                            'orderby'  => 'date',
+                            'order'    => 'asc',
+                        ]);
+ 
+                    if (!$response->successful()) break;
+ 
+                    $orders = $response->json();
+                    if (empty($orders)) break;
+ 
+                    foreach ($orders as $order) {
+ 
+                        $discountTotal  = (float) ($order['discount_total'] ?? 0);
+                        $pointsDiscount = 0;
+ 
+                        foreach ($order['meta_data'] ?? [] as $meta) {
+                            if ($meta['key'] === 'points_redeemed') {
+                                $pointsDiscount = (float) ($meta['value'] ?? 0) / 100;
+                            }
+                        }
+ 
+                        $totalDiscount = $discountTotal + $pointsDiscount;
+ 
+                        if ($totalDiscount <= 0) continue;
+ 
+                        $coupons = collect($order['coupon_lines'] ?? [])
+                            ->pluck('code')
+                            ->filter()
+                            ->implode(', ');
+ 
+                        $customerName = trim(
+                            ($order['billing']['first_name'] ?? '') . ' ' .
+                            ($order['billing']['last_name'] ?? '')
+                        ) ?: 'Walk-in Customer';
+ 
+                        $invoiceNumber = '';
+                        foreach ($order['meta_data'] ?? [] as $meta) {
+                            if ($meta['key'] === '_wcpdf_invoice_number') {
+                                $invoiceNumber = $meta['value'] ?? '';
+                                break;
+                            }
+                        }
+ 
+                        $discountOrders[] = [
+                            'Order Number'    => $order['number'] ?? $order['id'],
+                            'Invoice Number'  => $invoiceNumber ?: ('INV-' . ($order['number'] ?? '')),
+                            'Date'            => \Carbon\Carbon::parse($order['date_created'])->format('d M Y'),
+                            'Customer Name'   => $customerName,
+                            'Phone'           => $order['billing']['phone'] ?? '',
+                            'Email'           => $order['billing']['email'] ?? '',
+                            'Status'          => $order['status'] ?? '',
+                            'Payment Method'  => $order['payment_method_title'] ?? '',
+                            'Coupon Code'     => $coupons,
+                            'Coupon Discount' => round($discountTotal, 2),
+                            'Points Discount' => round($pointsDiscount, 2),
+                            'Total Discount'  => round($totalDiscount, 2),
+                            'Final Total'     => (float) ($order['total'] ?? 0),
+                        ];
+                    }
+ 
+                    $page++;
+                    if (count($orders) < 100) break;
+ 
+                } while (true);
+            }
+ 
+        } catch (\Throwable $e) {
+            abort(500, 'Error fetching orders: ' . $e->getMessage());
+        }
+ 
+        // ── CSV generate karo ──────────────────────────────────────────────
+ 
+        $filename = 'discount-orders-' .
+            $from->format('Y-m-d') . '-to-' .
+            $to->format('Y-m-d') . '-' .
+            now()->format('His') . '.csv';
+ 
+        $csvContent  = '';
+        $headers     = empty($discountOrders) ? [] : array_keys($discountOrders[0]);
+ 
+        // Header row
+        if (!empty($headers)) {
+            $csvContent .= implode(',', array_map(
+                fn($h) => '"' . str_replace('"', '""', $h) . '"',
+                $headers
+            )) . "\n";
+        }
+ 
+        // Data rows
+        foreach ($discountOrders as $row) {
+            $csvContent .= implode(',', array_map(
+                fn($v) => '"' . str_replace('"', '""', (string) $v) . '"',
+                array_values($row)
+            )) . "\n";
+        }
+ 
+        // ── Storage mein save karo ─────────────────────────────────────────
+ 
+        $storagePath = 'discount-reports/' . $filename;
+        \Illuminate\Support\Facades\Storage::disk('local')->put($storagePath, $csvContent);
+ 
+        \Illuminate\Support\Facades\Log::info('DISCOUNT REPORT GENERATED', [
+            'filename'       => $filename,
+            'orders_count'   => count($discountOrders),
+            'from'           => $from->toDateString(),
+            'to'             => $to->toDateString(),
+        ]);
+ 
+        // ── Download response ──────────────────────────────────────────────
+ 
+        return response($csvContent, 200, [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control'       => 'no-cache, no-store, must-revalidate',
+        ]);
+    }
 }
