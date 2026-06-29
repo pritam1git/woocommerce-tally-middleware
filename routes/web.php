@@ -10,40 +10,110 @@ use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\BulkSyncController;
 
-Route::middleware(['auth'])->prefix('admin')->group(function () {
 
-    Route::get('/dashboard', [ DashboardController::class,'index'])->name('admin.dashboard');
+/*
+|--------------------------------------------------------------------------
+| Admin Routes
+|--------------------------------------------------------------------------
+*/
 
-    Route::get('/admin/orders/{id}', [ DashboardController::class, 'show'])->name('admin.orders.show');
+Route::middleware([
+        'auth',
+        'throttle:60,1',
+    ])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
 
-    Route::delete('/admin/orders/{id}', [ DashboardController::class, 'delete'])->name('admin.orders.delete');
+        /*
+        |--------------------------------------------------------------------------
+        | Dashboard
+        |--------------------------------------------------------------------------
+        */
 
-    Route::post('/retry/{id}', [ DashboardController::class,'retry'])->name('admin.retry');
-    
-    Route::get('/bulk-sync', [BulkSyncController::class, 'index'])->name('admin.bulk-sync');
+        Route::get('/dashboard', [DashboardController::class, 'index'])
+            ->name('dashboard');
 
-    Route::post('/bulk-sync/preview', [BulkSyncController::class, 'preview'])->name('admin.bulk-sync.preview');
+        /*
+        |--------------------------------------------------------------------------
+        | Orders
+        |--------------------------------------------------------------------------
+        */
 
-    Route::post('/bulk-sync/sync', [BulkSyncController::class, 'sync'])->name('admin.bulk-sync.sync');
+        // Fixed: removed duplicate /admin prefix
+        Route::get('/orders/{id}', [DashboardController::class, 'show'])
+            ->whereNumber('id')
+            ->name('orders.show');
 
-    Route::get('/bulk-sync/progress', [BulkSyncController::class, 'progress'])->name('admin.bulk-sync.progress');
+        Route::delete('/orders/{id}', [DashboardController::class, 'delete'])
+            ->middleware('throttle:10,1')
+            ->whereNumber('id')
+            ->name('orders.delete');
 
-    Route::post('/bulk-sync/retry-failed', [BulkSyncController::class, 'retryFailed'])->name('admin.bulk-sync.retry-failed');
+        /*
+        |--------------------------------------------------------------------------
+        | Retry Sync
+        |--------------------------------------------------------------------------
+        */
 
-    Route::post('/bulk-sync/discount-orders', [BulkSyncController::class, 'discountOrders'])->name('admin.bulk-sync.discount-orders');
+        Route::post('/retry/{id}', [DashboardController::class, 'retry'])
+            ->middleware('throttle:10,1')
+            ->whereNumber('id')
+            ->name('retry');
 
-    Route::post('/bulk-sync/discount-orders/download', [BulkSyncController::class, 'downloadDiscountOrders'])->name('admin.bulk-sync.discount-download');
+        /*
+        |--------------------------------------------------------------------------
+        | Bulk Sync
+        |--------------------------------------------------------------------------
+        */
 
-});
+        Route::get('/bulk-sync', [BulkSyncController::class, 'index'])
+            ->name('bulk-sync');
+
+        Route::post('/bulk-sync/preview', [BulkSyncController::class, 'preview'])
+            ->middleware('throttle:20,1')
+            ->name('bulk-sync.preview');
+
+        Route::post('/bulk-sync/sync', [BulkSyncController::class, 'sync'])
+            ->middleware('throttle:5,1')
+            ->name('bulk-sync.sync');
+
+        Route::get('/bulk-sync/progress', [BulkSyncController::class, 'progress'])
+            ->name('bulk-sync.progress');
+
+        Route::post('/bulk-sync/retry-failed', [BulkSyncController::class, 'retryFailed'])
+            ->middleware('throttle:5,1')
+            ->name('bulk-sync.retry-failed');
+
+        Route::post('/bulk-sync/discount-orders', [BulkSyncController::class, 'discountOrders'])
+            ->middleware('throttle:10,1')
+            ->name('bulk-sync.discount-orders');
+
+        Route::post('/bulk-sync/discount-orders/download', [BulkSyncController::class, 'downloadDiscountOrders'])
+            ->middleware('throttle:10,1')
+            ->name('bulk-sync.discount-download');
+    });
+
+/*
+|--------------------------------------------------------------------------
+| Authentication Routes
+|--------------------------------------------------------------------------
+*/
 
 Auth::routes();
+
+/*
+|--------------------------------------------------------------------------
+| Public Routes
+|--------------------------------------------------------------------------
+*/
 
 Route::get('/', function () {
     return view('welcome');
 });
 
 Route::get('/home', function () {
-    return redirect('/admin/dashboard');
+    return redirect()->route('admin.dashboard');
 });
 
 
